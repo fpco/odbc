@@ -1,0 +1,23 @@
+name:                odbc
+version:             0.1.0.0
+license:             BSD3
+license-file:        LICENSE
+build-type:          Simple
+extra-source-files:  README.md
+cabal-version:       >=1.10
+
+library
+  hs-source-dirs:    src
+  ghc-options:       -Wall -O2
+  exposed-modules:   ODBC
+  default-language:  Haskell2010
+  extra-libraries:   odbc
+  c-sources:         cbits/odbc.c
+  includes:          cbits/odbc.h
+  cc-options:        -Wall -Wconversion
+  include-dirs:      cbits
+  build-depends:
+    base >= 4.7 && < 5,
+    async,
+    bytestring,
+    text
