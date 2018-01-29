@@ -20,6 +20,7 @@ module ODBC
   , query
     -- * Types
   , Value(..)
+  , Connection
   ) where
 
 import           Control.Concurrent.Async
@@ -76,7 +77,7 @@ data Value
   = TextValue !Text
   | BoolValue !Bool
   | DoubleValue !Double
-  | IntValue !Int32
+  | IntValue !Int
   deriving (Eq, Show, Typeable, Ord, Generic, Data)
 instance NFData Value
 
@@ -141,7 +142,7 @@ exec conn string =
   withBound
     (withHDBC conn "exec" (\dbc -> withExecDirect dbc string (const (pure ()))))
 
--- | Query and produce a strict list.
+-- | Query and return a list of rows.
 query :: Connection -> Text -> IO [[Value]]
 query conn string =
   withBound
@@ -308,7 +309,7 @@ getData stmt i col =
            withMalloc
              (\ignored -> do
                 apply (columnType col) (coerce intPtr) (SQLLEN 4) ignored
-                fmap IntValue (peek intPtr)))
+                fmap (IntValue . fromIntegral) (peek (intPtr :: Ptr Int32))))
     SQLSMALLINT 5 {-SQL_INTEGER-}
      ->
       withMalloc
