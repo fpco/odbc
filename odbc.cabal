@@ -23,3 +23,9 @@ library
     async,
     bytestring,
     text
+
+executable test
+  build-depends: base, text, odbc
+  ghc-options: -threaded
+  hs-source-dirs: app
+  main-is: Main.hs

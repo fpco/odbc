@@ -85,14 +85,7 @@ instance NFData Value
 
 -- | Connection to a database.
 newtype Connection = Connection
-  {connectionMVar :: MVar (Maybe ConnectionState)}
-
--- | Container of unsafe pointers. This value should only be accessed
--- from within the 'Connection' type.
-data ConnectionState = ConnectionState
-  { connectionEnv :: !(ForeignPtr SQLHENV)
-  , connectionDbc  :: !(ForeignPtr SQLHDBC)
-  }
+  {connectionMVar :: MVar (Maybe (ForeignPtr EnvAndDbc))}
 
 --------------------------------------------------------------------------------
 -- Exposed functions
@@ -103,39 +96,28 @@ connect ::
   -> IO Connection
 connect string =
   withBound
-    (do env <-
+    (do envAndDbc <-
           uninterruptibleMask_
-            (do ptr <- assertNotNull "odbc_SQLAllocEnv" odbc_SQLAllocEnv
-                newForeignPtr odbc_SQLFreeEnv (coerce ptr))
-        assertSuccess "odbc_SetEnvAttr" (withForeignPtr env odbc_SetEnvAttr)
+            (do ptr <- assertNotNull "odbc_AllocEnvAndDbc" odbc_AllocEnvAndDbc
+                newForeignPtr odbc_FreeEnvAndDbc (coerce ptr))
         -- Above: Allocate the environment.
-        -- Below: Allocate a database handle, not connected.
-        dbc <-
-          uninterruptibleMask_
-            (do ptr <-
-                  assertNotNull
-                    "odbc_SQLAllocDbc"
-                    (withForeignPtr env odbc_SQLAllocDbc)
-                newForeignPtr odbc_SQLFreeDbc (coerce ptr))
         -- Below: Try to connect to the database.
         T.useAsPtr
           string
           (\wstring len ->
              uninterruptibleMask_
                (do assertSuccess
-                     "odbc_SQLDriverConnect"
+                     "odbc_SQLDriverConnectW"
                      (withForeignPtr
-                        dbc
+                        envAndDbc
                         (\dbcPtr ->
                            odbc_SQLDriverConnectW
                              dbcPtr
                              (coerce wstring)
                              (fromIntegral len)))
-                   addForeignPtrFinalizer odbc_SQLDisconnect dbc))
+                   addForeignPtrFinalizer odbc_SQLDisconnect envAndDbc))
         -- Below: Keep the environment and the database handle in an mvar.
-        mvar <-
-          newMVar
-            (Just (ConnectionState {connectionEnv = env, connectionDbc = dbc}))
+        mvar <- newMVar (Just envAndDbc)
         pure (Connection mvar))
 
 -- | Close the connection. Further use of the 'Connection' will throw
@@ -148,11 +130,7 @@ close conn =
         -- because we wanted to free the connection now. But with
         -- regards to safety, the finalizers will take care of closing
         -- the connection and the env.
-        case mstate of
-          Just (ConnectionState env dbc) -> do
-            finalizeForeignPtr dbc
-            finalizeForeignPtr env
-          Nothing -> pure ())
+        maybe (evaluate ()) finalizeForeignPtr mstate)
 
 -- | Execute a statement on the database.
 exec ::
@@ -179,21 +157,20 @@ query conn string =
 -- Internal wrapper functions
 
 -- | Thread-safely access the connection pointer.
-withHDBC :: Connection -> String -> (Ptr SQLHDBC -> IO a) -> IO a
+withHDBC :: Connection -> String -> (Ptr EnvAndDbc -> IO a) -> IO a
 withHDBC conn label f =
   withMVar
     (connectionMVar conn)
     (\mfptr ->
        case mfptr of
          Nothing -> throwIO (DatabaseIsClosed label)
-         Just (ConnectionState {connectionDbc = db,connectionEnv=env}) -> do
-           v <- withForeignPtr db f
-           touchForeignPtr db
-           touchForeignPtr env
+         Just envAndDbc -> do
+           v <- withForeignPtr envAndDbc f
+           touchForeignPtr envAndDbc
            pure v)
 
 -- | Execute a query directly without preparation.
-withExecDirect :: Ptr SQLHDBC -> Text -> (forall s. SQLHSTMT s -> IO a) -> IO a
+withExecDirect :: Ptr EnvAndDbc -> Text -> (forall s. SQLHSTMT s -> IO a) -> IO a
 withExecDirect dbc string cont =
   withStmt
     dbc
@@ -207,7 +184,7 @@ withExecDirect dbc string cont =
        cont stmt)
 
 -- | Run the function with a statement.
-withStmt :: Ptr SQLHDBC -> (forall s. SQLHSTMT s -> IO a) -> IO a
+withStmt :: Ptr EnvAndDbc -> (forall s. SQLHSTMT s -> IO a) -> IO a
 withStmt hdbc =
   bracket
     (assertNotNull "odbc_SQLAllocStmt" (odbc_SQLAllocStmt hdbc))
@@ -385,11 +362,8 @@ assertSuccess label m = do
 
 -- Opaque pointers
 
--- | An environment. Allocated once per connection.
-data SQLHENV
-
--- | A database connection.
-data SQLHDBC
+-- | An environment and database connection in one go.
+data EnvAndDbc
 
 -- | The handle allocated for any query.
 newtype SQLHSTMT s = SQLHSTMT (Ptr (SQLHSTMT s))
@@ -428,29 +402,20 @@ newtype SQLWCHAR = SQLWCHAR CWString deriving (Show, Eq, Storable)
 --------------------------------------------------------------------------------
 -- Foreign functions
 
-foreign import ccall "odbc odbc_SQLAllocEnv"
-  odbc_SQLAllocEnv :: IO (Ptr SQLHENV)
+foreign import ccall "odbc odbc_AllocEnvAndDbc"
+  odbc_AllocEnvAndDbc :: IO (Ptr EnvAndDbc)
 
-foreign import ccall "odbc &odbc_SQLFreeEnv"
-  odbc_SQLFreeEnv :: FunPtr (Ptr SQLHENV -> IO ())
+foreign import ccall "odbc &odbc_FreeEnvAndDbc"
+  odbc_FreeEnvAndDbc :: FunPtr (Ptr EnvAndDbc -> IO ())
 
-foreign import ccall "odbc odbc_SetEnvAttr"
-  odbc_SetEnvAttr :: Ptr SQLHENV -> IO RETCODE
-
-foreign import ccall "odbc odbc_SQLAllocDbc"
-  odbc_SQLAllocDbc :: Ptr SQLHENV -> IO (Ptr SQLHDBC)
-
-foreign import ccall "odbc &odbc_SQLFreeDbc"
-  odbc_SQLFreeDbc :: FunPtr (Ptr SQLHDBC -> IO ())
-
-foreign import ccall "odbc odbc_SQLDriverConnect"
-  odbc_SQLDriverConnectW :: Ptr SQLHDBC -> SQLWCHAR -> SQLSMALLINT -> IO RETCODE
+foreign import ccall "odbc odbc_SQLDriverConnectW"
+  odbc_SQLDriverConnectW :: Ptr EnvAndDbc -> SQLWCHAR -> SQLSMALLINT -> IO RETCODE
 
 foreign import ccall "odbc &odbc_SQLDisconnect"
-  odbc_SQLDisconnect :: FunPtr (Ptr SQLHDBC -> IO ())
+  odbc_SQLDisconnect :: FunPtr (Ptr EnvAndDbc -> IO ())
 
 foreign import ccall "odbc odbc_SQLAllocStmt"
-  odbc_SQLAllocStmt :: Ptr SQLHDBC -> IO (SQLHSTMT s)
+  odbc_SQLAllocStmt :: Ptr EnvAndDbc -> IO (SQLHSTMT s)
 
 foreign import ccall "odbc odbc_SQLFreeStmt"
   odbc_SQLFreeStmt :: SQLHSTMT s -> IO ()

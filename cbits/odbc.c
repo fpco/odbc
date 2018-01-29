@@ -15,6 +15,15 @@
 #define MAXBUFLEN 256
 #define MAXNAME 256
 
+// Just a way of grouping together these two dependent resources. It's
+// probably not a good idea to free up an environment before freeing a
+// database. So, we put them together so that they can be allocated
+// and freed atomically.
+typedef struct EnvAndDbc {
+  SQLHENV *env;
+  SQLHDBC *dbc;
+} EnvAndDbc;
+
 void odbc_ProcessLogMessages(SQLSMALLINT plm_handle_type, SQLHANDLE plm_handle, char *logstring, int ConnInd);
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -67,35 +76,67 @@ void odbc_SQLFreeDbc(SQLHDBC *hdbc){
 }
 
 ////////////////////////////////////////////////////////////////////////////////
+// Allocate/dealloc env-and-database
+
+EnvAndDbc *odbc_AllocEnvAndDbc(){
+  SQLHENV *env = odbc_SQLAllocEnv();
+  if (env == NULL) {
+    return NULL;
+  } else {
+    int retcode = odbc_SetEnvAttr(env);
+    if ((retcode != SQL_SUCCESS_WITH_INFO) && (retcode != SQL_SUCCESS)) {
+      free(env);
+      return NULL;
+    } else {
+      SQLHDBC *dbc = odbc_SQLAllocDbc(env);
+      if (dbc == NULL) {
+        return NULL;
+      } else {
+        EnvAndDbc *envAndDbc = malloc(sizeof *envAndDbc);
+        envAndDbc->env = env;
+        envAndDbc->dbc = dbc;
+        return envAndDbc;
+      }
+    }
+  }
+}
+
+void odbc_FreeEnvAndDbc(EnvAndDbc *envAndDbc){
+  odbc_SQLFreeDbc(envAndDbc->dbc);
+  odbc_SQLFreeEnv(envAndDbc->env);
+  free(envAndDbc);
+}
+
+////////////////////////////////////////////////////////////////////////////////
 // Connect/disconnect
 
-RETCODE odbc_SQLDriverConnectW(SQLHDBC *hdbc, SQLWCHAR *connString, SQLSMALLINT len){
+RETCODE odbc_SQLDriverConnectW(EnvAndDbc *envAndDbc, SQLWCHAR *connString, SQLSMALLINT len){
   SQLSMALLINT ignored = 0;
   RETCODE r = SQLDriverConnectW(
-      *hdbc,
-      NULL,
-      connString,
-      len,
-      NULL,
-      0,
-      &ignored,
-      SQL_DRIVER_NOPROMPT);
+    *(envAndDbc->dbc),
+    NULL,
+    connString,
+    len,
+    NULL,
+    0,
+    &ignored,
+    SQL_DRIVER_NOPROMPT);
   if (r == SQL_ERROR)
-    odbc_ProcessLogMessages(SQL_HANDLE_DBC, *hdbc, "odbc_SQLDriverConnectW", FALSE);
+    odbc_ProcessLogMessages(SQL_HANDLE_DBC, *(envAndDbc->dbc), "odbc_SQLDriverConnectW", FALSE);
   return r;
 }
 
-void odbc_SQLDisconnect(SQLHDBC *hdbc){
-  SQLDisconnect(*hdbc);
+void odbc_SQLDisconnect(EnvAndDbc *envAndDbc){
+  SQLDisconnect(*(envAndDbc->dbc));
 }
 
 ////////////////////////////////////////////////////////////////////////////////
 // Alloc/dealloc statement
 
-SQLHSTMT *odbc_SQLAllocStmt(SQLHDBC *hdbc){
+SQLHSTMT *odbc_SQLAllocStmt(EnvAndDbc *envAndDbc){
   SQLHSTMT *hstmt = malloc(sizeof *hstmt);
   *hstmt = SQL_NULL_HSTMT;
-  RETCODE retcode = SQLAllocHandle (SQL_HANDLE_STMT, *hdbc, hstmt);
+  RETCODE retcode = SQLAllocHandle (SQL_HANDLE_STMT, *(envAndDbc->dbc), hstmt);
   if ((retcode != SQL_SUCCESS_WITH_INFO) && (retcode != SQL_SUCCESS)) {
     free(hstmt);
     return NULL;
