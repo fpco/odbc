@@ -10,7 +10,7 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE ForeignFunctionInterface #-}
 
--- | Trivial bindings to ODBC for testing purposes.
+-- | ODBC database API.
 
 module ODBC
   (
