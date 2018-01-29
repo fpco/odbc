@@ -1,5 +1,7 @@
 name:                odbc
-version:             0.1.0.0
+synopsis:            Haskell binding to the ODBC API
+description:         Haskell binding to the ODBC API.
+version:             0.0.1
 license:             BSD3
 license-file:        LICENSE
 build-type:          Simple
