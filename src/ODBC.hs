@@ -154,14 +154,20 @@ close conn =
             finalizeForeignPtr env
           Nothing -> pure ())
 
--- | Exec a statement on the database.
-exec :: Connection -> Text -> IO ()
+-- | Execute a statement on the database.
+exec ::
+     Connection
+  -> Text -- ^ SQL statement.
+  -> IO ()
 exec conn string =
   withBound
     (withHDBC conn "exec" (\dbc -> withExecDirect dbc string (const (pure ()))))
 
 -- | Query and return a list of rows.
-query :: Connection -> Text -> IO [[Value]]
+query ::
+     Connection
+  -> Text -- ^ SQL Query.
+  -> IO [[Value]]
 query conn string =
   withBound
     (withHDBC
