@@ -21,15 +21,17 @@ module ODBC
   ) where
 
 import           Control.Concurrent.Async
+import           Control.DeepSeq
 import           Control.Exception
 import qualified Data.ByteString as S
 import           Data.Coerce
+import           Data.Data
 import           Data.Int
 import           Data.Text (Text)
 import qualified Data.Text.Encoding as T
-import           Data.Typeable
 import           Foreign
 import           Foreign.C
+import           GHC.Generics
 
 --------------------------------------------------------------------------------
 -- Constants
@@ -62,12 +64,14 @@ data Column = Column
   , columnNull :: !SQLSMALLINT
   } deriving (Show)
 
+-- | A value used for input/output with the database.
 data Value
   = TextValue !Text
   | BoolValue !Bool
   | DoubleValue !Double
   | IntValue !Int32
-  deriving (Eq, Show)
+  deriving (Eq, Show, Typeable, Ord, Generic, Data)
+instance NFData Value
 
 --------------------------------------------------------------------------------
 -- Exposed functions
