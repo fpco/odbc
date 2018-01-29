@@ -1,3 +1,4 @@
+{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE BangPatterns #-}
@@ -30,7 +31,9 @@ import           Data.Coerce
 import           Data.Data
 import           Data.Int
 import           Data.Text (Text)
+import qualified Data.Text as T
 import qualified Data.Text.Encoding as T
+import qualified Data.Text.Foreign as T
 import           Foreign
 import           Foreign.C
 import           GHC.Generics
@@ -93,7 +96,7 @@ data ConnectionState = ConnectionState
 
 -- | Connect using the given connection string.
 connect ::
-     String -- ^ Connection string.
+     Text -- ^ Connection string.
   -> IO Connection
 connect string =
   withBound
@@ -112,15 +115,19 @@ connect string =
                     (withForeignPtr env odbc_SQLAllocDbc)
                 newForeignPtr odbc_SQLFreeDbc (coerce ptr))
         -- Below: Try to connect to the database.
-        withCString
+        T.useAsPtr
           string
-          (\cstring ->
+          (\wstring len ->
              uninterruptibleMask_
                (do assertSuccess
                      "odbc_SQLDriverConnect"
                      (withForeignPtr
                         dbc
-                        (\dbcPtr -> odbc_SQLDriverConnect dbcPtr cstring))
+                        (\dbcPtr ->
+                           odbc_SQLDriverConnectW
+                             dbcPtr
+                             (coerce wstring)
+                             (fromIntegral len)))
                    addForeignPtrFinalizer odbc_SQLDisconnect dbc))
         -- Below: Keep the environment and the database handle in an mvar.
         mvar <-
@@ -129,13 +136,13 @@ connect string =
         pure (Connection mvar))
 
 -- | Exec a statement on the database.
-exec :: Connection -> String -> IO ()
+exec :: Connection -> Text -> IO ()
 exec conn string =
   withBound
     (withHDBC conn "exec" (\dbc -> withExecDirect dbc string (const (pure ()))))
 
 -- | Query and produce a strict list.
-query :: Connection -> String -> IO [[Value]]
+query :: Connection -> Text -> IO [[Value]]
 query conn string =
   withBound
     (withHDBC
@@ -161,14 +168,17 @@ withHDBC conn label f =
            pure v)
 
 -- | Execute a query directly without preparation.
-withExecDirect :: Ptr SQLHDBC -> String -> (forall s. SQLHSTMT s -> IO a) -> IO a
+withExecDirect :: Ptr SQLHDBC -> Text -> (forall s. SQLHSTMT s -> IO a) -> IO a
 withExecDirect dbc string cont =
   withStmt
     dbc
     (\stmt -> do
        assertSuccess
-         "odbc_SQLExecDirect"
-         (withCString string (odbc_SQLExecDirect stmt))
+         "odbc_SQLExecDirectW"
+         (T.useAsPtr
+            string
+            (\wstring len ->
+               odbc_SQLExecDirectW stmt (coerce wstring) (fromIntegral len)))
        cont stmt)
 
 -- | Run the function with a statement.
@@ -216,42 +226,42 @@ fetchStatementRows stmt = do
 -- | Describe the given column by its integer index.
 describeColumn :: SQLHSTMT s -> Int16 -> IO Column
 describeColumn stmt i =
-  withCStringLen
-    (replicate 100 '\0')
-    (\(namep, namelen) ->
-       withMalloc
-         (\namelenp ->
-            withMalloc
-              (\typep ->
-                 withMalloc
-                   (\sizep ->
-                      withMalloc
-                        (\digitsp ->
-                           withMalloc
-                             (\nullp -> do
-                                assertSuccess
-                                  "odbc_SQLDescribeCol"
-                                  (odbc_SQLDescribeCol
-                                     stmt
-                                     (SQLUSMALLINT (fromIntegral i))
-                                     (coerce namep)
-                                     (SQLSMALLINT (fromIntegral namelen))
-                                     namelenp
-                                     typep
-                                     sizep
-                                     digitsp
-                                     nullp)
-                                typ <- peek typep
-                                size <- peek sizep
-                                digits <- peek digitsp
-                                isnull <- peek nullp
-                                evaluate
-                                  Column
-                                  { columnType = typ
-                                  , columnSize = size
-                                  , columnDigits = digits
-                                  , columnNull = isnull
-                                  }))))))
+  T.useAsPtr
+    (T.replicate 1000 "0")
+    (\namep namelen ->
+       (withMalloc
+          (\namelenp ->
+             (withMalloc
+                (\typep ->
+                   withMalloc
+                     (\sizep ->
+                        withMalloc
+                          (\digitsp ->
+                             withMalloc
+                               (\nullp -> do
+                                  assertSuccess
+                                    "odbc_SQLDescribeColW"
+                                    (odbc_SQLDescribeColW
+                                       stmt
+                                       (SQLUSMALLINT (fromIntegral i))
+                                       (coerce namep)
+                                       (SQLSMALLINT (fromIntegral namelen))
+                                       namelenp
+                                       typep
+                                       sizep
+                                       digitsp
+                                       nullp)
+                                  typ <- peek typep
+                                  size <- peek sizep
+                                  digits <- peek digitsp
+                                  isnull <- peek nullp
+                                  evaluate
+                                    Column
+                                    { columnType = typ
+                                    , columnSize = size
+                                    , columnDigits = digits
+                                    , columnNull = isnull
+                                    }))))))))
 
 -- | Pull data for the given column.
 getData :: SQLHSTMT s -> Int -> Column -> IO Value
@@ -376,13 +386,19 @@ newtype SQLUCHAR = SQLUCHAR Word8 deriving (Show, Eq, Storable)
 newtype SQLCHAR = SQLCHAR CChar deriving (Show, Eq, Storable)
 
 -- https://github.com/Microsoft/ODBC-Specification/blob/753d7e714b7eab9eaab4ad6105fdf4267d6ad6f6/Windows/inc/sqltypes.h#L88
-newtype SQLSMALLINT = SQLSMALLINT Int16 deriving (Show, Eq, Storable)
+newtype SQLSMALLINT = SQLSMALLINT Int16 deriving (Show, Eq, Storable, Num)
 
 -- https://github.com/Microsoft/ODBC-Specification/blob/753d7e714b7eab9eaab4ad6105fdf4267d6ad6f6/Windows/inc/sqltypes.h#L64
-newtype SQLLEN = SQLLEN Int64 deriving (Show, Eq, Storable)
+newtype SQLLEN = SQLLEN Int64 deriving (Show, Eq, Storable, Num)
 
 -- https://github.com/Microsoft/ODBC-Specification/blob/753d7e714b7eab9eaab4ad6105fdf4267d6ad6f6/Windows/inc/sqltypes.h#L65..L65
 newtype SQLULEN = SQLULEN Word64 deriving (Show, Eq, Storable)
+
+-- https://github.com/Microsoft/ODBC-Specification/blob/753d7e714b7eab9eaab4ad6105fdf4267d6ad6f6/Windows/inc/sqltypes.h#L60
+newtype SQLINTEGER = SQLINTEGER Int64 deriving (Show, Eq, Storable, Num)
+
+-- https://github.com/Microsoft/ODBC-Specification/blob/753d7e714b7eab9eaab4ad6105fdf4267d6ad6f6/Windows/inc/sqltypes.h#L332
+newtype SQLWCHAR = SQLWCHAR CWString deriving (Show, Eq, Storable)
 
 --------------------------------------------------------------------------------
 -- Foreign functions
@@ -403,7 +419,7 @@ foreign import ccall "odbc &odbc_SQLFreeDbc"
   odbc_SQLFreeDbc :: FunPtr (Ptr SQLHDBC -> IO ())
 
 foreign import ccall "odbc odbc_SQLDriverConnect"
-  odbc_SQLDriverConnect :: Ptr SQLHDBC -> CString -> IO RETCODE
+  odbc_SQLDriverConnectW :: Ptr SQLHDBC -> SQLWCHAR -> SQLSMALLINT -> IO RETCODE
 
 foreign import ccall "odbc &odbc_SQLDisconnect"
   odbc_SQLDisconnect :: FunPtr (Ptr SQLHDBC -> IO ())
@@ -414,8 +430,8 @@ foreign import ccall "odbc odbc_SQLAllocStmt"
 foreign import ccall "odbc odbc_SQLFreeStmt"
   odbc_SQLFreeStmt :: SQLHSTMT s -> IO ()
 
-foreign import ccall "odbc odbc_SQLExecDirect"
-  odbc_SQLExecDirect :: SQLHSTMT s -> CString -> IO RETCODE
+foreign import ccall "odbc odbc_SQLExecDirectW"
+  odbc_SQLExecDirectW :: SQLHSTMT s -> SQLWCHAR -> SQLINTEGER -> IO RETCODE
 
 foreign import ccall "odbc odbc_SQLFetch"
   odbc_SQLFetch :: SQLHSTMT s -> IO RETCODE
@@ -436,11 +452,11 @@ foreign import ccall "odbc odbc_SQLGetData"
   -> Ptr SQLLEN
   -> IO RETCODE
 
-foreign import ccall "odbc odbc_SQLDescribeCol"
-  odbc_SQLDescribeCol
+foreign import ccall "odbc odbc_SQLDescribeColW"
+  odbc_SQLDescribeColW
     :: SQLHSTMT s
     -> SQLUSMALLINT
-    -> Ptr SQLCHAR
+    -> Ptr SQLWCHAR
     -> SQLSMALLINT
     -> Ptr SQLSMALLINT
     -> Ptr SQLSMALLINT

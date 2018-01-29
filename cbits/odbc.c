@@ -69,19 +69,19 @@ void odbc_SQLFreeDbc(SQLHDBC *hdbc){
 ////////////////////////////////////////////////////////////////////////////////
 // Connect/disconnect
 
-RETCODE odbc_SQLDriverConnect(SQLHDBC *hdbc, SQLCHAR *connString){
+RETCODE odbc_SQLDriverConnectW(SQLHDBC *hdbc, SQLWCHAR *connString, SQLSMALLINT len){
   SQLSMALLINT ignored = 0;
-  RETCODE r = SQLDriverConnect(
+  RETCODE r = SQLDriverConnectW(
       *hdbc,
       NULL,
       connString,
-      SQL_NTS,
+      len,
       NULL,
       0,
       &ignored,
       SQL_DRIVER_NOPROMPT);
   if (r == SQL_ERROR)
-    odbc_ProcessLogMessages(SQL_HANDLE_DBC, *hdbc, "odbc_SQLDriverConnect", FALSE);
+    odbc_ProcessLogMessages(SQL_HANDLE_DBC, *hdbc, "odbc_SQLDriverConnectW", FALSE);
   return r;
 }
 
@@ -114,22 +114,23 @@ void odbc_SQLFreeStmt(SQLHSTMT *hstmt){
 ////////////////////////////////////////////////////////////////////////////////
 // Prepare
 
-SQLRETURN odbc_SQLPrepare(
+SQLRETURN odbc_SQLPrepareW(
   SQLHSTMT  *   hstmt,
-  SQLCHAR *     text
+  SQLWCHAR  *   text,
+  SQLINTEGER len
   ){
-  RETCODE r = SQLPrepare(*hstmt, text, (SQLINTEGER)strlen((void*)text));
+  RETCODE r = SQLPrepareW(*hstmt, text, len);
   if (r == SQL_ERROR)
-    odbc_ProcessLogMessages(SQL_HANDLE_STMT, *hstmt, "odbc_SQLPrepare", FALSE);
+    odbc_ProcessLogMessages(SQL_HANDLE_STMT, *hstmt, "odbc_SQLPrepareW", FALSE);
   return r;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
 // Execute
 
-RETCODE odbc_SQLExecDirect(SQLHSTMT *hstmt, UCHAR *stmt){
-  RETCODE r = SQLExecDirect(*hstmt, stmt, SQL_NTS);
-  if (r == SQL_ERROR) odbc_ProcessLogMessages(SQL_HANDLE_STMT, *hstmt, "odbc_SQLExecDirect", FALSE);
+RETCODE odbc_SQLExecDirectW(SQLHSTMT *hstmt, SQLWCHAR *stmt, SQLINTEGER len){
+  RETCODE r = SQLExecDirectW(*hstmt, stmt, len);
+  if (r == SQL_ERROR) odbc_ProcessLogMessages(SQL_HANDLE_STMT, *hstmt, "odbc_SQLExecDirectW", FALSE);
   return r;
 }
 
@@ -168,17 +169,17 @@ RETCODE odbc_SQLGetData(SQLHSTMT *hstmt,
   return r;
 }
 
-SQLRETURN odbc_SQLDescribeCol(
+SQLRETURN odbc_SQLDescribeColW(
   SQLHSTMT      *StatementHandle,
   SQLUSMALLINT   ColumnNumber,
-  SQLCHAR *      ColumnName,
+  SQLWCHAR *      ColumnName,
   SQLSMALLINT    BufferLength,
   SQLSMALLINT *  NameLengthPtr,
   SQLSMALLINT *  DataTypePtr,
   SQLULEN *      ColumnSizePtr,
   SQLSMALLINT *  DecimalDigitsPtr,
   SQLSMALLINT *  NullablePtr){
-  return SQLDescribeCol(
+  return SQLDescribeColW(
     *StatementHandle,
     ColumnNumber,
     ColumnName,
