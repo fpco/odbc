@@ -1,3 +1,4 @@
+{-# LANGUAGE TupleSections #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE DeriveGeneric #-}
@@ -15,6 +16,7 @@ module ODBC
   (
     -- * Connection
     connect
+  , close
     -- * Executing queries
   , exec
   , query
@@ -135,6 +137,22 @@ connect string =
           newMVar
             (Just (ConnectionState {connectionEnv = env, connectionDbc = dbc}))
         pure (Connection mvar))
+
+-- | Close the connection. Further use of the 'Connection' will throw
+-- an exception.
+close :: Connection -> IO ()
+close conn =
+  withBound
+    (do mstate <- modifyMVar (connectionMVar conn) (pure . (Nothing, ))
+        -- If an async exception comes after here, that's a pity
+        -- because we wanted to free the connection now. But with
+        -- regards to safety, the finalizers will take care of closing
+        -- the connection and the env.
+        case mstate of
+          Just (ConnectionState env dbc) -> do
+            finalizeForeignPtr dbc
+            finalizeForeignPtr env
+          Nothing -> pure ())
 
 -- | Exec a statement on the database.
 exec :: Connection -> Text -> IO ()
