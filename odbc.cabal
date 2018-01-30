@@ -12,7 +12,7 @@ library
   hs-source-dirs:    src
   ghc-options:       -Wall -O2
   cc-options:        -Wall -Wconversion
-  exposed-modules:   ODBC
+  exposed-modules:   Database.ODBC
   default-language:  Haskell2010
   extra-libraries:   odbc
   c-sources:         cbits/odbc.c
@@ -28,5 +28,5 @@ test-suite test
   type: exitcode-stdio-1.0
   build-depends: base, text, odbc
   ghc-options: -threaded
-  hs-source-dirs: app
+  hs-source-dirs: test
   main-is: Main.hs

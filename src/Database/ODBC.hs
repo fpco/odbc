@@ -12,7 +12,7 @@
 
 -- | ODBC database API.
 
-module ODBC
+module Database.ODBC
   (
     -- * Connection
     connect
