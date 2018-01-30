@@ -160,7 +160,7 @@ exec conn string =
 query ::
      MonadIO m
   => Connection
-  -> Text -- ^ SQL Query.
+  -> Text -- ^ SQL query.
   -> m [[Maybe Value]]
 query conn string =
   withBound
