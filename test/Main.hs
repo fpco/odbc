@@ -60,10 +60,10 @@ dataRetrieval = do
     "Simple back and forth"
     (do c <- connect connectionString
         exec c "DROP TABLE IF EXISTS test"
-        exec c "CREATE TABLE test (int integer, text text, bool bit)"
+        exec c "CREATE TABLE test (int integer, text text, bool bit, nt ntext)"
         exec
           c
-          "INSERT INTO test VALUES (123, 'abc', 1), (456, 'def', 0), (NULL, NULL, NULL)"
+          "INSERT INTO test VALUES (123, 'abc', 1, 'wib'), (456, 'def', 0, 'wibble'), (NULL, NULL, NULL, NULL)"
         _ <- query c "SELECT * FROM test"
         close c
         shouldBe True True)

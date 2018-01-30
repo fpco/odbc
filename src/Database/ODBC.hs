@@ -47,17 +47,48 @@ import           Foreign.C
 import           GHC.Generics
 
 --------------------------------------------------------------------------------
--- Types
+-- Public types
+
+-- | Connection to a database.
+newtype Connection = Connection
+  {connectionMVar :: MVar (Maybe (ForeignPtr EnvAndDbc))}
 
 -- | A database exception.
 data ODBCException
-  = UnsuccessfulReturnCode !String !RETCODE
+  = UnsuccessfulReturnCode !String
+                           !Int16
+    -- ^ An ODBC operation failed with the given return code.
   | AllocationReturnedNull !String
-  | UnknownDataType !String !Int16
+    -- ^ Allocating an ODBC resource failed.
+  | UnknownDataType !String
+                    !Int16
+    -- ^ An unsupported/unknown data type was returned from the ODBC
+    -- driver.
   | DatabaseIsClosed !String
+    -- ^ You tried to use the database connection after it was closed.
   | DatabaseAlreadyClosed
+    -- ^ You attempted to 'close' the database twice.
   deriving (Typeable, Show, Eq)
 instance Exception ODBCException
+
+-- | A value used for input/output with the database.
+data Value
+  = TextValue !Text
+    -- ^ A Unicode text value.
+  | BytesValue !ByteString
+    -- ^ A vector of bytes. It might be a string, but we don't know
+    -- the encoding.
+  | BoolValue !Bool
+    -- ^ A simple boolean.
+  | DoubleValue !Double
+    -- ^ Floating point values that fit in a 'Double'.
+  | IntValue !Int
+    -- ^ Integer values that fit in an 'Int'.
+  deriving (Eq, Show, Typeable, Ord, Generic, Data)
+instance NFData Value
+
+--------------------------------------------------------------------------------
+-- Internal types
 
 -- | A column description.
 data Column = Column
@@ -66,20 +97,6 @@ data Column = Column
   , columnDigits :: !SQLSMALLINT
   , columnNull :: !SQLSMALLINT
   } deriving (Show)
-
--- | A value used for input/output with the database.
-data Value
-  = TextValue !Text
-  | BytesValue !ByteString
-  | BoolValue !Bool
-  | DoubleValue !Double
-  | IntValue !Int
-  deriving (Eq, Show, Typeable, Ord, Generic, Data)
-instance NFData Value
-
--- | Connection to a database.
-newtype Connection = Connection
-  {connectionMVar :: MVar (Maybe (ForeignPtr EnvAndDbc))}
 
 --------------------------------------------------------------------------------
 -- Exposed functions
@@ -221,7 +238,7 @@ fetchStatementRows stmt = do
                 do fields <- sequence (zipWith (getData stmt) [1 ..] types)
                    loop (rows . (fields :))
               | otherwise ->
-                throwIO (UnsuccessfulReturnCode "odbc_SQLFetch" retcode0)
+                throwIO (UnsuccessfulReturnCode "odbc_SQLFetch" (coerce retcode0))
   loop id
 
 -- | Describe the given column by its integer index.
@@ -442,7 +459,7 @@ assertSuccess label m = do
   retcode <- m
   if retcode == sql_success || retcode == sql_success_with_info
     then pure ()
-    else throwIO (UnsuccessfulReturnCode label retcode)
+    else throwIO (UnsuccessfulReturnCode label (coerce retcode))
 
 --------------------------------------------------------------------------------
 -- Foreign types
