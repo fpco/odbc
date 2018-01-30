@@ -21,9 +21,8 @@ import           Test.QuickCheck
 import           Test.QuickCheck.Monadic
 import           Text.Printf
 
-connectionString :: Text
-connectionString =
-  "DRIVER={ODBC Driver 13 for SQL Server};SERVER=192.168.99.100;Uid=SA;Pwd=Passw0rd;Encrypt=no"
+--------------------------------------------------------------------------------
+-- Tests
 
 main :: IO ()
 main = hspec spec
@@ -32,16 +31,20 @@ spec :: Spec
 spec = do
   describe
     "Connectivity"
-    (do it
-          "Connect, no close"
-          (do _ <- connect connectionString
-              shouldBe True True)
-        it
-          "Connect, explicit close"
-          (do c <- connect connectionString
-              close c
-              shouldBe True True))
+    connectivity
   describe "Data retrieval" dataRetrieval
+
+connectivity :: Spec
+connectivity = do
+  it
+    "Connect, no close"
+    (do _ <- connect connectionString
+        shouldBe True True)
+  it
+    "Connect, explicit close"
+    (do c <- connect connectionString
+        close c
+        shouldBe True True)
 
 dataRetrieval :: Spec
 dataRetrieval = do
@@ -65,14 +68,17 @@ dataRetrieval = do
   quickCheckIt "integer" IntValue (T.pack . show)
   quickCheckIt "int" IntValue (T.pack . show)
   quickCheckIt "float" DoubleValue (T.pack . printf "%f")
-  quickCheckIt "nvarchar(1024)" TextValue showText
-  quickCheckIt "varchar(1024)" BytesValue showBytes
+  quickCheckIt
+    ("nvarchar(" <> T.pack (show maxStringLen) <> ")")
+    TextValue
+    showText
+  quickCheckIt
+    ("varchar(" <> T.pack (show maxStringLen) <> ")")
+    BytesValue
+    showBytes
 
-instance Arbitrary Text where
-  arbitrary = fmap (T.filter validTextChar . T.pack . take 1024) arbitrary
-
-instance Arbitrary ByteString where
-  arbitrary = fmap (S8.filter (\c -> isAscii c && validTextChar c) . S8.pack . take 1024) arbitrary
+--------------------------------------------------------------------------------
+-- Combinators
 
 quickCheckIt :: (Show t, Arbitrary t) => Text -> (t -> Value) -> (t -> Text) -> Spec
 quickCheckIt typ cons shower =
@@ -104,6 +110,9 @@ quickCheckIt typ cons shower =
                            show expected ++ "\n\nfor query: " <> T.unpack q))
                      assert (rows == expected)))))
 
+--------------------------------------------------------------------------------
+-- Helpers
+
 showBytes :: ByteString -> Text
 showBytes t = "'" <> T.pack (S8.unpack t) <> "'"
 
@@ -112,3 +121,27 @@ showText t = "N'" <> t <> "'"
 
 validTextChar :: Char -> Bool
 validTextChar = \c -> c /= '\'' && c /= '\n' && c /= '\r'
+
+--------------------------------------------------------------------------------
+-- Constants
+
+maxStringLen :: Int
+maxStringLen = 1024
+
+connectionString :: Text
+connectionString =
+  "DRIVER={ODBC Driver 13 for SQL Server};SERVER=192.168.99.100;Uid=SA;Pwd=Passw0rd;Encrypt=no"
+
+--------------------------------------------------------------------------------
+-- Orphan instances
+
+instance Arbitrary Text where
+  arbitrary =
+    fmap (T.filter validTextChar . T.pack . take maxStringLen) arbitrary
+
+instance Arbitrary ByteString where
+  arbitrary =
+    fmap
+      (S8.filter (\c -> isAscii c && validTextChar c) .
+       S8.pack . take maxStringLen)
+      arbitrary
