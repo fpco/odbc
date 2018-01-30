@@ -26,7 +26,7 @@ library
 
 test-suite test
   type: exitcode-stdio-1.0
-  build-depends: base, text, odbc
+  build-depends: base, text, odbc, hspec, QuickCheck, bytestring
   ghc-options: -threaded
   hs-source-dirs: test
   main-is: Main.hs

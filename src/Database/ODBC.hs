@@ -23,6 +23,7 @@ module Database.ODBC
     -- * Types
   , Value(..)
   , Connection
+  , ODBCException(..)
   ) where
 
 import           Control.Concurrent.Async
@@ -36,6 +37,7 @@ import qualified Data.ByteString.Unsafe as S
 import           Data.Coerce
 import           Data.Data
 import           Data.Int
+import           Data.Monoid
 import           Data.Text (Text)
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as T
@@ -269,6 +271,22 @@ getData stmt i col =
        in do bufferp <- callocBytes (fromIntegral allocBytes)
              mlen <-
                apply
+                 "sql_longvarchar/sql_c_char"
+                 sql_c_char
+                 (coerce bufferp)
+                 (SQLLEN (fromIntegral allocBytes))
+             case mlen of
+               Just len -> do
+                 bs <- S.unsafePackMallocCStringLen (bufferp, fromIntegral len)
+                 evaluate (Just (BytesValue bs))
+               Nothing -> pure Nothing
+     | colType == sql_varchar ->
+       let maxChars = coerce (columnSize col) :: Word64
+           allocBytes = maxChars + 1
+       in do bufferp <- callocBytes (fromIntegral allocBytes)
+             mlen <-
+               apply
+                 "sql_varchar/sql_c_char"
                  sql_c_char
                  (coerce bufferp)
                  (SQLLEN (fromIntegral allocBytes))
@@ -285,6 +303,7 @@ getData stmt i col =
             (\bufferp -> do
                mlen <-
                  apply
+                   "sql_wvarchar/sql_c_wchar"
                    sql_c_wchar
                    (coerce bufferp)
                    (SQLLEN (fromIntegral allocBytes))
@@ -297,7 +316,8 @@ getData stmt i col =
      | colType == sql_bit ->
        withMalloc
          (\bitPtr -> do
-            mlen <- apply sql_c_bit (coerce bitPtr) (SQLLEN 1)
+            mlen <-
+              apply "sql_bit/sql_c_bit" sql_c_bit (coerce bitPtr) (SQLLEN 1)
             case mlen of
               Nothing -> pure Nothing
               Just {} ->
@@ -305,7 +325,12 @@ getData stmt i col =
      | colType == sql_double ->
        withMalloc
          (\doublePtr -> do
-            mlen <- apply sql_c_double (coerce doublePtr) (SQLLEN 8)
+            mlen <-
+              apply
+                "sql_double/sql_c_double"
+                sql_c_double
+                (coerce doublePtr)
+                (SQLLEN 8)
             case mlen of
               Nothing -> pure Nothing
               Just {} -> do
@@ -314,7 +339,12 @@ getData stmt i col =
      | colType == sql_float ->
        withMalloc
          (\doublePtr -> do
-            mlen <- apply sql_c_double (coerce doublePtr) (SQLLEN 8)
+            mlen <-
+              apply
+                "sql_float/sql_c_double"
+                sql_c_double
+                (coerce doublePtr)
+                (SQLLEN 8)
             case mlen of
               Nothing -> pure Nothing
               Just {} -> do
@@ -323,7 +353,12 @@ getData stmt i col =
      | colType == sql_integer ->
        withMalloc
          (\intPtr -> do
-            mlen <- apply sql_c_long (coerce intPtr) (SQLLEN 4)
+            mlen <-
+              apply
+                "sql_integer/sql_c_long"
+                sql_c_long
+                (coerce intPtr)
+                (SQLLEN 4)
             case mlen of
               Nothing -> pure Nothing
               Just {} ->
@@ -333,7 +368,12 @@ getData stmt i col =
      | colType == sql_smallint ->
        withMalloc
          (\intPtr -> do
-            mlen <- apply sql_c_short (coerce intPtr) (SQLLEN 2)
+            mlen <-
+              apply
+                "sql_smallint/sql_c_short"
+                sql_c_short
+                (coerce intPtr)
+                (SQLLEN 2)
             case mlen of
               Nothing -> pure Nothing
               Just {} ->
@@ -348,11 +388,11 @@ getData stmt i col =
              in n))
   where
     colType = columnType col
-    apply ty bufferp bufferlen =
+    apply label ty bufferp bufferlen =
       withMalloc
         (\copiedPtr -> do
            assertSuccess
-             "odbc_SQLGetData"
+             (label <> "/odbc_SQLGetData")
              (odbc_SQLGetData
                 stmt
                 (SQLUSMALLINT (fromIntegral i))
