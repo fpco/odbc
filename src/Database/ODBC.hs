@@ -53,7 +53,7 @@ import           GHC.Generics
 data ODBCException
   = UnsuccessfulReturnCode !String !RETCODE
   | AllocationReturnedNull !String
-  | UnknownType !String !Int16
+  | UnknownDataType !String !Int16
   | DatabaseIsClosed !String
   | DatabaseAlreadyClosed
   deriving (Typeable, Show, Eq)
@@ -315,6 +315,24 @@ getData stmt i col =
                    bs <- S.packCStringLen (bufferp, fromIntegral len)
                    let !v = TextValue (T.decodeUtf16LE bs)
                    pure (Just v))
+     | colType == sql_wlongvarchar ->
+       let maxChars = coerce (columnSize col) :: Word64
+           allocBytes = maxChars * 2 + 2
+       in withCallocBytes
+            (fromIntegral allocBytes)
+            (\bufferp -> do
+               mlen <-
+                 apply
+                   "sql_wlongvarchar/sql_c_wchar"
+                   sql_c_wchar
+                   (coerce bufferp)
+                   (SQLLEN (fromIntegral allocBytes))
+               case mlen of
+                 Nothing -> pure Nothing
+                 Just len -> do
+                   bs <- S.packCStringLen (bufferp, fromIntegral len)
+                   let !v = TextValue (T.decodeUtf16LE bs)
+                   pure (Just v))
      | colType == sql_bit ->
        withMalloc
          (\bitPtr -> do
@@ -384,7 +402,7 @@ getData stmt i col =
                   (peek (intPtr :: Ptr Int16)))
      | otherwise ->
        throwIO
-         (UnknownType
+         (UnknownDataType
             "getData"
             (let SQLSMALLINT n = colType
              in n))

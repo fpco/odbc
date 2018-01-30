@@ -67,15 +67,11 @@ dataRetrieval = do
         _ <- query c "SELECT * FROM test"
         close c
         shouldBe True True)
-  quickCheckIt
-    "bit"
-    BoolValue
-    (\case
-       True -> "1"
-       False -> "0")
   quickCheckIt "integer" IntValue (T.pack . show)
   quickCheckIt "int" IntValue (T.pack . show)
   quickCheckIt "float" DoubleValue (T.pack . printf "%f")
+  quickCheckIt "ntext" TextValue showText
+  quickCheckIt "text" BytesValue showBytes
   quickCheckIt
     ("nvarchar(" <> T.pack (show maxStringLen) <> ")")
     TextValue
@@ -84,6 +80,12 @@ dataRetrieval = do
     ("varchar(" <> T.pack (show maxStringLen) <> ")")
     BytesValue
     showBytes
+  quickCheckIt
+    "bit"
+    BoolValue
+    (\case
+       True -> "1"
+       False -> "0")
 
 --------------------------------------------------------------------------------
 -- Combinators
