@@ -42,26 +42,13 @@ import           Foreign.C
 import           GHC.Generics
 
 --------------------------------------------------------------------------------
--- Constants
-
--- https://github.com/Microsoft/ODBC-Specification/blob/753d7e714b7eab9eaab4ad6105fdf4267d6ad6f6/Windows/inc/sql.h#L50..L51
-sql_success :: RETCODE
-sql_success = RETCODE 0
-
-sql_success_with_info :: RETCODE
-sql_success_with_info = RETCODE 1
-
-sql_no_data :: RETCODE
-sql_no_data = RETCODE 100
-
---------------------------------------------------------------------------------
 -- Types
 
 -- | A database exception.
 data ODBCException
   = UnsuccessfulReturnCode !String !RETCODE
   | AllocationReturnedNull !String
-  | UnknownType !Int16
+  | UnknownType !String !Int16
   | DatabaseIsClosed !String
   deriving (Typeable, Show, Eq)
 instance Exception ODBCException
@@ -268,63 +255,67 @@ describeColumn stmt i =
 -- | Pull data for the given column.
 getData :: SQLHSTMT s -> Int -> Column -> IO Value
 getData stmt i col =
-  case columnType col of
-    SQLSMALLINT (-9) {-SQL_WVARCHAR-}
-     ->
-      withCallocBytes
-        (fromIntegral allocBytes)
-        (\bufferp -> do
-           withMalloc
-             (\copiedPtr -> do
-                apply
-                  (SQLSMALLINT (-8))
-                  (coerce bufferp)
-                  (SQLLEN (fromIntegral allocBytes))
-                  copiedPtr
-                SQLLEN copiedBytes <- peek copiedPtr
-                bs <- S.packCStringLen (bufferp, fromIntegral copiedBytes)
-                evaluate (TextValue (T.decodeUtf16LE bs))))
-      where maxChars = coerce (columnSize col) :: Word64
-            allocBytes = maxChars * 2 + 2
-    SQLSMALLINT (-7) {-SQL_BIT-}
-     ->
-      withMalloc
-        (\ignored ->
-           withMalloc
-             (\bitPtr -> do
-                apply (columnType col) (coerce bitPtr) (SQLLEN 1) ignored
-                fmap (BoolValue . (/= (0 :: Word8))) (peek bitPtr)))
-    SQLSMALLINT 6 {-SQL_FLOAT-}
-     ->
-      withMalloc
-        (\doublePtr ->
-           withMalloc
-             (\ignored -> do
-                apply (SQLSMALLINT 8) (coerce doublePtr) (SQLLEN 8) ignored
-                !d <- fmap DoubleValue (peek doublePtr)
-                pure d))
-    SQLSMALLINT 4 {-SQL_INTEGER-}
-     ->
-      withMalloc
-        (\intPtr ->
-           withMalloc
-             (\ignored -> do
-                apply (columnType col) (coerce intPtr) (SQLLEN 4) ignored
-                fmap (IntValue . fromIntegral) (peek (intPtr :: Ptr Int32))))
-    SQLSMALLINT 5 {-SQL_INTEGER-}
-     ->
-      withMalloc
-        (\intPtr ->
-           withMalloc
-             (\ignored -> do
-                apply (columnType col) (coerce intPtr) (SQLLEN 2) ignored
-                fmap (IntValue . fromIntegral) (peek (intPtr :: Ptr Int16))))
-    _ ->
-      throwIO
-        (UnknownType
-           (let SQLSMALLINT n = columnType col
-            in n))
+  if | colType == sql_wvarchar ->
+       let maxChars = coerce (columnSize col) :: Word64
+           allocBytes = maxChars * 2 + 2
+       in withCallocBytes
+            (fromIntegral allocBytes)
+            (\bufferp -> do
+               withMalloc
+                 (\copiedPtr -> do
+                    apply
+                      sql_wchar
+                      (coerce bufferp)
+                      (SQLLEN (fromIntegral allocBytes))
+                      copiedPtr
+                    SQLLEN copiedBytes <- peek copiedPtr
+                    bs <- S.packCStringLen (bufferp, fromIntegral copiedBytes)
+                    evaluate (TextValue (T.decodeUtf16LE bs))))
+     | colType == sql_bit ->
+       withMalloc
+         (\ignored ->
+            withMalloc
+              (\bitPtr -> do
+                 apply (colType) (coerce bitPtr) (SQLLEN 1) ignored
+                 fmap (BoolValue . (/= (0 :: Word8))) (peek bitPtr)))
+     | colType == sql_double ->
+       withMalloc
+         (\doublePtr ->
+            withMalloc
+              (\ignored -> do
+                 apply (colType) (coerce doublePtr) (SQLLEN 8) ignored
+                 !d <- fmap DoubleValue (peek doublePtr)
+                 pure d))
+     | colType == sql_float ->
+       withMalloc
+         (\doublePtr ->
+            withMalloc
+              (\ignored -> do
+                 apply sql_double (coerce doublePtr) (SQLLEN 8) ignored
+                 !d <- fmap DoubleValue (peek doublePtr)
+                 pure d))
+     | colType == sql_integer ->
+       withMalloc
+         (\intPtr ->
+            withMalloc
+              (\ignored -> do
+                 apply (colType) (coerce intPtr) (SQLLEN 4) ignored
+                 fmap (IntValue . fromIntegral) (peek (intPtr :: Ptr Int32))))
+     | colType == sql_smallint ->
+       withMalloc
+         (\intPtr ->
+            withMalloc
+              (\ignored -> do
+                 apply (colType) (coerce intPtr) (SQLLEN 2) ignored
+                 fmap (IntValue . fromIntegral) (peek (intPtr :: Ptr Int16))))
+     | otherwise ->
+       throwIO
+         (UnknownType
+            "getData"
+            (let SQLSMALLINT n = colType
+             in n))
   where
+    colType = columnType col
     apply ty bufferp bufferlen strlenp =
       assertSuccess
         "odbc_SQLGetData"
@@ -463,3 +454,94 @@ withMalloc m = bracket malloc free m
 
 withCallocBytes :: Storable a => Int -> (Ptr a -> IO b) -> IO b
 withCallocBytes n m = bracket (callocBytes n) free m
+
+--------------------------------------------------------------------------------
+-- Constants
+
+-- https://github.com/Microsoft/ODBC-Specification/blob/753d7e714b7eab9eaab4ad6105fdf4267d6ad6f6/Windows/inc/sql.h#L50..L51
+sql_success :: RETCODE
+sql_success = RETCODE 0
+
+sql_success_with_info :: RETCODE
+sql_success_with_info = RETCODE 1
+
+sql_no_data :: RETCODE
+sql_no_data = RETCODE 100
+
+sql_unknown_type :: SQLSMALLINT
+sql_unknown_type = 0
+
+sql_char :: SQLSMALLINT
+sql_char = 1
+
+sql_numeric :: SQLSMALLINT
+sql_numeric = 2
+
+sql_decimal :: SQLSMALLINT
+sql_decimal = 3
+
+sql_integer :: SQLSMALLINT
+sql_integer = 4
+
+sql_smallint :: SQLSMALLINT
+sql_smallint = 5
+
+sql_float :: SQLSMALLINT
+sql_float = 6
+
+sql_real :: SQLSMALLINT
+sql_real = 7
+
+sql_double :: SQLSMALLINT
+sql_double = 8
+
+sql_datetime :: SQLSMALLINT
+sql_datetime = 9
+
+sql_varchar :: SQLSMALLINT
+sql_varchar = 12
+
+sql_wchar :: SQLSMALLINT
+sql_wchar = (-8)
+
+sql_wvarchar :: SQLSMALLINT
+sql_wvarchar = (-9)
+
+sql_wlongvarchar :: SQLSMALLINT
+sql_wlongvarchar = (-10)
+
+sql_date :: SQLSMALLINT
+sql_date = 9
+
+sql_interval :: SQLSMALLINT
+sql_interval = 10
+
+sql_time :: SQLSMALLINT
+sql_time = 10
+
+sql_timestamp :: SQLSMALLINT
+sql_timestamp = 11
+
+sql_longvarchar :: SQLSMALLINT
+sql_longvarchar = (-1)
+
+sql_binary :: SQLSMALLINT
+sql_binary = (-2)
+
+sql_varbinary :: SQLSMALLINT
+sql_varbinary = (-3)
+
+sql_longvarbinary :: SQLSMALLINT
+sql_longvarbinary = (-4)
+
+sql_bigint :: SQLSMALLINT
+sql_bigint = (-5)
+
+sql_tinyint :: SQLSMALLINT
+sql_tinyint = (-6)
+
+sql_bit :: SQLSMALLINT
+sql_bit = (-7)
+
+sql_guid :: SQLSMALLINT
+sql_guid = (-11)

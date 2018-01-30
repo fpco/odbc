@@ -24,7 +24,8 @@ library
     bytestring,
     text
 
-executable test
+test-suite test
+  type: exitcode-stdio-1.0
   build-depends: base, text, odbc
   ghc-options: -threaded
   hs-source-dirs: app
