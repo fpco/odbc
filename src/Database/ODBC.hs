@@ -29,6 +29,7 @@ import           Control.Concurrent.Async
 import           Control.Concurrent.MVar
 import           Control.DeepSeq
 import           Control.Exception
+import           Control.Monad.IO.Class
 import           Data.ByteString (ByteString)
 import qualified Data.ByteString as S
 import qualified Data.ByteString.Unsafe as S
@@ -82,16 +83,18 @@ newtype Connection = Connection
 
 -- | Connect using the given connection string.
 connect ::
-     Text -- ^ Connection string.
-  -> IO Connection
+     MonadIO m
+  => Text -- ^ Connection string.
+  -> m Connection
 connect string =
   withBound
     (do envAndDbc <-
           uninterruptibleMask_
-            (do ptr <- assertNotNull "odbc_AllocEnvAndDbc" odbc_AllocEnvAndDbc
+            (do ptr <-
+                  assertNotNull "odbc_AllocEnvAndDbc" odbc_AllocEnvAndDbc
                 newForeignPtr odbc_FreeEnvAndDbc (coerce ptr))
-        -- Above: Allocate the environment.
-        -- Below: Try to connect to the database.
+             -- Above: Allocate the environment.
+             -- Below: Try to connect to the database.
         T.useAsPtr
           string
           (\wstring len ->
@@ -106,13 +109,13 @@ connect string =
                              (coerce wstring)
                              (fromIntegral len)))
                    addForeignPtrFinalizer odbc_SQLDisconnect envAndDbc))
-        -- Below: Keep the environment and the database handle in an mvar.
+             -- Below: Keep the environment and the database handle in an mvar.
         mvar <- newMVar (Just envAndDbc)
         pure (Connection mvar))
 
 -- | Close the connection. Further use of the 'Connection' will throw
 -- an exception.
-close :: Connection -> IO ()
+close :: MonadIO m => Connection -> m ()
 close conn =
   withBound
     (do mstate <- modifyMVar (connectionMVar conn) (pure . (Nothing, ))
@@ -124,18 +127,20 @@ close conn =
 
 -- | Execute a statement on the database.
 exec ::
-     Connection
+     MonadIO m
+  => Connection
   -> Text -- ^ SQL statement.
-  -> IO ()
+  -> m ()
 exec conn string =
   withBound
     (withHDBC conn "exec" (\dbc -> withExecDirect dbc string (const (pure ()))))
 
 -- | Query and return a list of rows.
 query ::
-     Connection
+     MonadIO m
+  => Connection
   -> Text -- ^ SQL Query.
-  -> IO [[Maybe Value]]
+  -> m [[Maybe Value]]
 query conn string =
   withBound
     (withHDBC
@@ -182,8 +187,8 @@ withStmt hdbc =
 
 -- | Run an action in a bound thread. This is neccessary due to the
 -- interaction with signals in ODBC and GHC's runtime.
-withBound :: IO a -> IO a
-withBound = flip withAsyncBound wait
+withBound :: MonadIO m => IO a -> m a
+withBound = liftIO . flip withAsyncBound wait
 
 --------------------------------------------------------------------------------
 -- Internal data retrieval functions
