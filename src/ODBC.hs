@@ -135,7 +135,7 @@ exec conn string =
 query ::
      Connection
   -> Text -- ^ SQL Query.
-  -> IO [[Value]]
+  -> IO [[Maybe Value]]
 query conn string =
   withBound
     (withHDBC
@@ -189,7 +189,7 @@ withBound = flip withAsyncBound wait
 -- Internal data retrieval functions
 
 -- | Fetch all rows from a statement.
-fetchStatementRows :: SQLHSTMT s -> IO [[Value]]
+fetchStatementRows :: SQLHSTMT s -> IO [[Maybe Value]]
 fetchStatementRows stmt = do
   SQLSMALLINT cols <-
     withMalloc
@@ -256,77 +256,85 @@ describeColumn stmt i =
                                     }))))))))
 
 -- | Pull data for the given column.
-getData :: SQLHSTMT s -> Int -> Column -> IO Value
+getData :: SQLHSTMT s -> Int -> Column -> IO (Maybe Value)
 getData stmt i col =
   if | colType == sql_longvarchar ->
        let maxChars = coerce (columnSize col) :: Word64
            allocBytes = maxChars + 1
        in do bufferp <- callocBytes (fromIntegral allocBytes)
-             withMalloc
-               (\copiedPtr -> do
-                  apply
-                    sql_c_char
-                    (coerce bufferp)
-                    (SQLLEN (fromIntegral allocBytes))
-                    copiedPtr
-                  SQLLEN copiedBytes <- peek copiedPtr
-                  bs <-
-                    S.unsafePackMallocCStringLen
-                      (bufferp, fromIntegral copiedBytes)
-                  evaluate (BytesValue bs))
+             mlen <-
+               apply
+                 sql_c_char
+                 (coerce bufferp)
+                 (SQLLEN (fromIntegral allocBytes))
+             case mlen of
+               Just len -> do
+                 bs <- S.unsafePackMallocCStringLen (bufferp, fromIntegral len)
+                 evaluate (Just (BytesValue bs))
+               Nothing -> pure Nothing
      | colType == sql_wvarchar ->
        let maxChars = coerce (columnSize col) :: Word64
            allocBytes = maxChars * 2 + 2
        in withCallocBytes
             (fromIntegral allocBytes)
             (\bufferp -> do
-               withMalloc
-                 (\copiedPtr -> do
-                    apply
-                      sql_c_wchar
-                      (coerce bufferp)
-                      (SQLLEN (fromIntegral allocBytes))
-                      copiedPtr
-                    SQLLEN copiedBytes <- peek copiedPtr
-                    bs <- S.packCStringLen (bufferp, fromIntegral copiedBytes)
-                    evaluate (TextValue (T.decodeUtf16LE bs))))
+               mlen <-
+                 apply
+                   sql_c_wchar
+                   (coerce bufferp)
+                   (SQLLEN (fromIntegral allocBytes))
+               case mlen of
+                 Nothing -> pure Nothing
+                 Just len -> do
+                   bs <- S.packCStringLen (bufferp, fromIntegral len)
+                   let !v = TextValue (T.decodeUtf16LE bs)
+                   pure (Just v))
      | colType == sql_bit ->
        withMalloc
-         (\ignored ->
-            withMalloc
-              (\bitPtr -> do
-                 apply sql_c_bit (coerce bitPtr) (SQLLEN 1) ignored
-                 fmap (BoolValue . (/= (0 :: Word8))) (peek bitPtr)))
+         (\bitPtr -> do
+            mlen <- apply sql_c_bit (coerce bitPtr) (SQLLEN 1)
+            case mlen of
+              Nothing -> pure Nothing
+              Just {} ->
+                fmap (Just . BoolValue . (/= (0 :: Word8))) (peek bitPtr))
      | colType == sql_double ->
        withMalloc
-         (\doublePtr ->
-            withMalloc
-              (\ignored -> do
-                 apply sql_c_double (coerce doublePtr) (SQLLEN 8) ignored
-                 !d <- fmap DoubleValue (peek doublePtr)
-                 pure d))
+         (\doublePtr -> do
+            mlen <- apply sql_c_double (coerce doublePtr) (SQLLEN 8)
+            case mlen of
+              Nothing -> pure Nothing
+              Just {} -> do
+                !d <- fmap DoubleValue (peek doublePtr)
+                pure (Just d))
      | colType == sql_float ->
        withMalloc
-         (\doublePtr ->
-            withMalloc
-              (\ignored -> do
-                 apply sql_c_double (coerce doublePtr) (SQLLEN 8) ignored
-                 !d <- fmap DoubleValue (peek doublePtr)
-                 pure d))
+         (\doublePtr -> do
+            mlen <- apply sql_c_double (coerce doublePtr) (SQLLEN 8)
+            case mlen of
+              Nothing -> pure Nothing
+              Just {} -> do
+                !d <- fmap DoubleValue (peek doublePtr)
+                pure (Just d))
      | colType == sql_integer ->
        withMalloc
-         (\intPtr ->
-            withMalloc
-              (\ignored -> do
-                 apply sql_c_long (coerce intPtr) (SQLLEN 4) ignored
-                 fmap (IntValue . fromIntegral) (peek (intPtr :: Ptr Int32))))
+         (\intPtr -> do
+            mlen <- apply sql_c_long (coerce intPtr) (SQLLEN 4)
+            case mlen of
+              Nothing -> pure Nothing
+              Just {} ->
+                fmap
+                  (Just . IntValue . fromIntegral)
+                  (peek (intPtr :: Ptr Int32)))
      | colType == sql_smallint ->
        withMalloc
-         (\intPtr ->
-            withMalloc
-              (\ignored -> do
-                 apply sql_c_short (coerce intPtr) (SQLLEN 2) ignored
-                 fmap (IntValue . fromIntegral) (peek (intPtr :: Ptr Int16))))
+         (\intPtr -> do
+            mlen <- apply sql_c_short (coerce intPtr) (SQLLEN 2)
+            case mlen of
+              Nothing -> pure Nothing
+              Just {} ->
+                fmap
+                  (Just . IntValue . fromIntegral)
+                  (peek (intPtr :: Ptr Int16)))
      | otherwise ->
        throwIO
          (UnknownType
@@ -335,16 +343,22 @@ getData stmt i col =
              in n))
   where
     colType = columnType col
-    apply ty bufferp bufferlen strlenp =
-      assertSuccess
-        "odbc_SQLGetData"
-        (odbc_SQLGetData
-           stmt
-           (SQLUSMALLINT (fromIntegral i))
-           ty
-           bufferp
-           bufferlen
-           strlenp)
+    apply ty bufferp bufferlen =
+      withMalloc
+        (\copiedPtr -> do
+           assertSuccess
+             "odbc_SQLGetData"
+             (odbc_SQLGetData
+                stmt
+                (SQLUSMALLINT (fromIntegral i))
+                ty
+                bufferp
+                bufferlen
+                copiedPtr)
+           copiedBytes <- peek copiedPtr
+           if copiedBytes == sql_null_data
+             then pure Nothing
+             else pure (Just (coerce copiedBytes :: Int64)))
 
 --------------------------------------------------------------------------------
 -- Correctness checks
@@ -491,6 +505,9 @@ sql_success_with_info = RETCODE 1
 
 sql_no_data :: RETCODE
 sql_no_data = RETCODE 100
+
+sql_null_data :: SQLLEN
+sql_null_data = (-1)
 
 --------------------------------------------------------------------------------
 -- SQL data type constants
