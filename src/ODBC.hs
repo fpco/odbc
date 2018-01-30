@@ -29,7 +29,9 @@ import           Control.Concurrent.Async
 import           Control.Concurrent.MVar
 import           Control.DeepSeq
 import           Control.Exception
+import           Data.ByteString (ByteString)
 import qualified Data.ByteString as S
+import qualified Data.ByteString.Unsafe as S
 import           Data.Coerce
 import           Data.Data
 import           Data.Int
@@ -64,6 +66,7 @@ data Column = Column
 -- | A value used for input/output with the database.
 data Value
   = TextValue !Text
+  | BytesValue !ByteString
   | BoolValue !Bool
   | DoubleValue !Double
   | IntValue !Int
@@ -255,7 +258,23 @@ describeColumn stmt i =
 -- | Pull data for the given column.
 getData :: SQLHSTMT s -> Int -> Column -> IO Value
 getData stmt i col =
-  if | colType == sql_wvarchar ->
+  if | colType == sql_longvarchar ->
+       let maxChars = coerce (columnSize col) :: Word64
+           allocBytes = maxChars + 1
+       in do bufferp <- callocBytes (fromIntegral allocBytes)
+             withMalloc
+               (\copiedPtr -> do
+                  apply
+                    sql_c_char
+                    (coerce bufferp)
+                    (SQLLEN (fromIntegral allocBytes))
+                    copiedPtr
+                  SQLLEN copiedBytes <- peek copiedPtr
+                  bs <-
+                    S.unsafePackMallocCStringLen
+                      (bufferp, fromIntegral copiedBytes)
+                  evaluate (BytesValue bs))
+     | colType == sql_wvarchar ->
        let maxChars = coerce (columnSize col) :: Word64
            allocBytes = maxChars * 2 + 2
        in withCallocBytes
@@ -264,7 +283,7 @@ getData stmt i col =
                withMalloc
                  (\copiedPtr -> do
                     apply
-                      sql_wchar
+                      sql_c_wchar
                       (coerce bufferp)
                       (SQLLEN (fromIntegral allocBytes))
                       copiedPtr
@@ -276,14 +295,14 @@ getData stmt i col =
          (\ignored ->
             withMalloc
               (\bitPtr -> do
-                 apply (colType) (coerce bitPtr) (SQLLEN 1) ignored
+                 apply sql_c_bit (coerce bitPtr) (SQLLEN 1) ignored
                  fmap (BoolValue . (/= (0 :: Word8))) (peek bitPtr)))
      | colType == sql_double ->
        withMalloc
          (\doublePtr ->
             withMalloc
               (\ignored -> do
-                 apply (colType) (coerce doublePtr) (SQLLEN 8) ignored
+                 apply sql_c_double (coerce doublePtr) (SQLLEN 8) ignored
                  !d <- fmap DoubleValue (peek doublePtr)
                  pure d))
      | colType == sql_float ->
@@ -291,7 +310,7 @@ getData stmt i col =
          (\doublePtr ->
             withMalloc
               (\ignored -> do
-                 apply sql_double (coerce doublePtr) (SQLLEN 8) ignored
+                 apply sql_c_double (coerce doublePtr) (SQLLEN 8) ignored
                  !d <- fmap DoubleValue (peek doublePtr)
                  pure d))
      | colType == sql_integer ->
@@ -299,14 +318,14 @@ getData stmt i col =
          (\intPtr ->
             withMalloc
               (\ignored -> do
-                 apply (colType) (coerce intPtr) (SQLLEN 4) ignored
+                 apply sql_c_long (coerce intPtr) (SQLLEN 4) ignored
                  fmap (IntValue . fromIntegral) (peek (intPtr :: Ptr Int32))))
      | colType == sql_smallint ->
        withMalloc
          (\intPtr ->
             withMalloc
               (\ignored -> do
-                 apply (colType) (coerce intPtr) (SQLLEN 2) ignored
+                 apply sql_c_short (coerce intPtr) (SQLLEN 2) ignored
                  fmap (IntValue . fromIntegral) (peek (intPtr :: Ptr Int16))))
      | otherwise ->
        throwIO
@@ -361,6 +380,11 @@ newtype SQLHSTMT s = SQLHSTMT (Ptr (SQLHSTMT s))
 
 -- | Used to get data.
 newtype SQLPOINTER = SQLPOINTER (Ptr SQLPOINTER)
+
+-- | A type that maps to https://docs.microsoft.com/en-us/sql/odbc/reference/appendixes/c-data-types
+newtype SQLCTYPE =
+  SQLCTYPE Int16
+  deriving (Show, Eq, Storable)
 
 -- https://github.com/Microsoft/ODBC-Specification/blob/753d7e714b7eab9eaab4ad6105fdf4267d6ad6f6/Windows/inc/sqltypes.h#L152
 newtype RETCODE = RETCODE Int16
@@ -427,7 +451,7 @@ foreign import ccall "odbc odbc_SQLGetData"
  odbc_SQLGetData
   :: SQLHSTMT s
   -> SQLUSMALLINT
-  -> SQLSMALLINT
+  -> SQLCTYPE
   -> SQLPOINTER
   -> SQLLEN
   -> Ptr SQLLEN
@@ -456,7 +480,7 @@ withCallocBytes :: Storable a => Int -> (Ptr a -> IO b) -> IO b
 withCallocBytes n m = bracket (callocBytes n) free m
 
 --------------------------------------------------------------------------------
--- Constants
+-- SQL constants
 
 -- https://github.com/Microsoft/ODBC-Specification/blob/753d7e714b7eab9eaab4ad6105fdf4267d6ad6f6/Windows/inc/sql.h#L50..L51
 sql_success :: RETCODE
@@ -467,6 +491,9 @@ sql_success_with_info = RETCODE 1
 
 sql_no_data :: RETCODE
 sql_no_data = RETCODE 100
+
+--------------------------------------------------------------------------------
+-- SQL data type constants
 
 sql_unknown_type :: SQLSMALLINT
 sql_unknown_type = 0
@@ -545,3 +572,24 @@ sql_bit = (-7)
 
 sql_guid :: SQLSMALLINT
 sql_guid = (-11)
+
+--------------------------------------------------------------------------------
+-- C type constants
+
+sql_c_wchar :: SQLCTYPE
+sql_c_wchar = coerce sql_wchar
+
+sql_c_char :: SQLCTYPE
+sql_c_char = coerce sql_char
+
+sql_c_double :: SQLCTYPE
+sql_c_double = coerce sql_double
+
+sql_c_long :: SQLCTYPE
+sql_c_long = coerce sql_integer
+
+sql_c_short :: SQLCTYPE
+sql_c_short = coerce sql_smallint
+
+sql_c_bit :: SQLCTYPE
+sql_c_bit = coerce sql_bit
