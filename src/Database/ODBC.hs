@@ -594,17 +594,17 @@ sql_null_data = (-1)
 --------------------------------------------------------------------------------
 -- SQL data type constants
 
-sql_unknown_type :: SQLSMALLINT
-sql_unknown_type = 0
+-- sql_unknown_type :: SQLSMALLINT
+-- sql_unknown_type = 0
 
 sql_char :: SQLSMALLINT
 sql_char = 1
 
-sql_numeric :: SQLSMALLINT
-sql_numeric = 2
+-- sql_numeric :: SQLSMALLINT
+-- sql_numeric = 2
 
-sql_decimal :: SQLSMALLINT
-sql_decimal = 3
+-- sql_decimal :: SQLSMALLINT
+-- sql_decimal = 3
 
 sql_integer :: SQLSMALLINT
 sql_integer = 4
@@ -615,14 +615,14 @@ sql_smallint = 5
 sql_float :: SQLSMALLINT
 sql_float = 6
 
-sql_real :: SQLSMALLINT
-sql_real = 7
+-- sql_real :: SQLSMALLINT
+-- sql_real = 7
 
 sql_double :: SQLSMALLINT
 sql_double = 8
 
-sql_datetime :: SQLSMALLINT
-sql_datetime = 9
+-- sql_datetime :: SQLSMALLINT
+-- sql_datetime = 9
 
 sql_varchar :: SQLSMALLINT
 sql_varchar = 12
@@ -636,41 +636,41 @@ sql_wvarchar = (-9)
 sql_wlongvarchar :: SQLSMALLINT
 sql_wlongvarchar = (-10)
 
-sql_date :: SQLSMALLINT
-sql_date = 9
+-- sql_date :: SQLSMALLINT
+-- sql_date = 9
 
-sql_interval :: SQLSMALLINT
-sql_interval = 10
+-- sql_interval :: SQLSMALLINT
+-- sql_interval = 10
 
-sql_time :: SQLSMALLINT
-sql_time = 10
+-- sql_time :: SQLSMALLINT
+-- sql_time = 10
 
-sql_timestamp :: SQLSMALLINT
-sql_timestamp = 11
+-- sql_timestamp :: SQLSMALLINT
+-- sql_timestamp = 11
 
 sql_longvarchar :: SQLSMALLINT
 sql_longvarchar = (-1)
 
-sql_binary :: SQLSMALLINT
-sql_binary = (-2)
+-- sql_binary :: SQLSMALLINT
+-- sql_binary = (-2)
 
-sql_varbinary :: SQLSMALLINT
-sql_varbinary = (-3)
+-- sql_varbinary :: SQLSMALLINT
+-- sql_varbinary = (-3)
 
-sql_longvarbinary :: SQLSMALLINT
-sql_longvarbinary = (-4)
+-- sql_longvarbinary :: SQLSMALLINT
+-- sql_longvarbinary = (-4)
 
-sql_bigint :: SQLSMALLINT
-sql_bigint = (-5)
+-- sql_bigint :: SQLSMALLINT
+-- sql_bigint = (-5)
 
-sql_tinyint :: SQLSMALLINT
-sql_tinyint = (-6)
+-- sql_tinyint :: SQLSMALLINT
+-- sql_tinyint = (-6)
 
 sql_bit :: SQLSMALLINT
 sql_bit = (-7)
 
-sql_guid :: SQLSMALLINT
-sql_guid = (-11)
+-- sql_guid :: SQLSMALLINT
+-- sql_guid = (-11)
 
 --------------------------------------------------------------------------------
 -- C type constants
