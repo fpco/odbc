@@ -287,7 +287,8 @@ getData stmt i col =
   if | colType == sql_longvarchar ->
        let maxChars = coerce (columnSize col) :: Word64
            allocBytes = maxChars + 1
-       in do bufferp <- callocBytes (fromIntegral allocBytes)
+       in do putStrLn ("maxChars: " ++ show maxChars)
+             bufferp <- callocBytes (fromIntegral allocBytes)
              mlen <-
                apply
                  "sql_longvarchar/sql_c_char"
@@ -302,7 +303,8 @@ getData stmt i col =
      | colType == sql_varchar ->
        let maxChars = coerce (columnSize col) :: Word64
            allocBytes = maxChars + 1
-       in do bufferp <- callocBytes (fromIntegral allocBytes)
+       in do putStrLn ("maxChars: " ++ show maxChars)
+             bufferp <- callocBytes (fromIntegral allocBytes)
              mlen <-
                apply
                  "sql_varchar/sql_c_char"
@@ -317,7 +319,8 @@ getData stmt i col =
      | colType == sql_wvarchar ->
        let maxChars = coerce (columnSize col) :: Word64
            allocBytes = maxChars * 2 + 2
-       in withCallocBytes
+       in putStrLn ("maxChars: " ++ show maxChars) >>
+          withCallocBytes
             (fromIntegral allocBytes)
             (\bufferp -> do
                mlen <-
@@ -335,7 +338,8 @@ getData stmt i col =
      | colType == sql_wlongvarchar ->
        let maxChars = coerce (columnSize col) :: Word64
            allocBytes = maxChars * 2 + 2
-       in withCallocBytes
+       in putStrLn ("maxChars: " ++ show maxChars) >>
+          withCallocBytes
             (fromIntegral allocBytes)
             (\bufferp -> do
                mlen <-
