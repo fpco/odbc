@@ -34,6 +34,7 @@ spec = do
     connectivity
   describe "Data retrieval" dataRetrieval
 
+
 connectivity :: Spec
 connectivity = do
   it
@@ -45,6 +46,13 @@ connectivity = do
     (do c <- connect connectionString
         close c
         shouldBe True True)
+  it
+    "Double close fails"
+    (shouldThrow
+       (do c <- connect connectionString
+           close c
+           close c)
+       (== DatabaseAlreadyClosed))
 
 dataRetrieval :: Spec
 dataRetrieval = do

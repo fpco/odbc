@@ -55,6 +55,7 @@ data ODBCException
   | AllocationReturnedNull !String
   | UnknownType !String !Int16
   | DatabaseIsClosed !String
+  | DatabaseAlreadyClosed
   deriving (Typeable, Show, Eq)
 instance Exception ODBCException
 
@@ -116,7 +117,8 @@ connect string =
         pure (Connection mvar))
 
 -- | Close the connection. Further use of the 'Connection' will throw
--- an exception.
+-- an exception. Double closes also throw an exception to avoid
+-- architectural mistakes.
 close :: MonadIO m => Connection -> m ()
 close conn =
   withBound
@@ -125,7 +127,7 @@ close conn =
         -- because we wanted to free the connection now. But with
         -- regards to safety, the finalizers will take care of closing
         -- the connection and the env.
-        maybe (evaluate ()) finalizeForeignPtr mstate)
+        maybe (throwIO DatabaseAlreadyClosed) finalizeForeignPtr mstate)
 
 -- | Execute a statement on the database.
 exec ::
