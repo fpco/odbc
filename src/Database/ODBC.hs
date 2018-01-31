@@ -30,6 +30,7 @@ import           Control.Concurrent.Async
 import           Control.Concurrent.MVar
 import           Control.DeepSeq
 import           Control.Exception
+import           Control.Monad
 import           Control.Monad.IO.Class
 import           Data.ByteString (ByteString)
 import qualified Data.ByteString as S
@@ -37,12 +38,11 @@ import qualified Data.ByteString.Unsafe as S
 import           Data.Coerce
 import           Data.Data
 import           Data.Int
-import           Data.Monoid
 import           Data.Text (Text)
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as T
 import qualified Data.Text.Foreign as T
-import           Foreign
+import           Foreign hiding (void)
 import           Foreign.C
 import           GHC.Generics
 
@@ -68,6 +68,8 @@ data ODBCException
     -- ^ You tried to use the database connection after it was closed.
   | DatabaseAlreadyClosed
     -- ^ You attempted to 'close' the database twice.
+  | NoTotalInformation !Int
+    -- ^ No total length information for column.
   deriving (Typeable, Show, Eq)
 instance Exception ODBCException
 
@@ -235,7 +237,7 @@ fetchStatementRows stmt = do
                      else pure (rows [])
               | retcode0 == sql_success ||
                   retcode0 == sql_success_with_info ->
-                do fields <- sequence (zipWith (getData stmt) [1 ..] types)
+                do fields <- sequence (zipWith (getData stmt) [SQLUSMALLINT 1 ..] types)
                    loop (rows . (fields :))
               | otherwise ->
                 throwIO (UnsuccessfulReturnCode "odbc_SQLFetch" (coerce retcode0))
@@ -282,83 +284,16 @@ describeColumn stmt i =
                                     }))))))))
 
 -- | Pull data for the given column.
-getData :: SQLHSTMT s -> Int -> Column -> IO (Maybe Value)
+getData :: SQLHSTMT s -> SQLUSMALLINT -> Column -> IO (Maybe Value)
 getData stmt i col =
-  if | colType == sql_longvarchar ->
-       let maxChars = coerce (columnSize col) :: Word64
-           allocBytes = maxChars + 1
-       in do putStrLn ("maxChars: " ++ show maxChars)
-             bufferp <- callocBytes (fromIntegral allocBytes)
-             mlen <-
-               apply
-                 "sql_longvarchar/sql_c_char"
-                 sql_c_char
-                 (coerce bufferp)
-                 (SQLLEN (fromIntegral allocBytes))
-             case mlen of
-               Just len -> do
-                 bs <- S.unsafePackMallocCStringLen (bufferp, fromIntegral len)
-                 evaluate (Just (BytesValue bs))
-               Nothing -> pure Nothing
-     | colType == sql_varchar ->
-       let maxChars = coerce (columnSize col) :: Word64
-           allocBytes = maxChars + 1
-       in do putStrLn ("maxChars: " ++ show maxChars)
-             bufferp <- callocBytes (fromIntegral allocBytes)
-             mlen <-
-               apply
-                 "sql_varchar/sql_c_char"
-                 sql_c_char
-                 (coerce bufferp)
-                 (SQLLEN (fromIntegral allocBytes))
-             case mlen of
-               Just len -> do
-                 bs <- S.unsafePackMallocCStringLen (bufferp, fromIntegral len)
-                 evaluate (Just (BytesValue bs))
-               Nothing -> pure Nothing
-     | colType == sql_wvarchar ->
-       let maxChars = coerce (columnSize col) :: Word64
-           allocBytes = maxChars * 2 + 2
-       in putStrLn ("maxChars: " ++ show maxChars) >>
-          withCallocBytes
-            (fromIntegral allocBytes)
-            (\bufferp -> do
-               mlen <-
-                 apply
-                   "sql_wvarchar/sql_c_wchar"
-                   sql_c_wchar
-                   (coerce bufferp)
-                   (SQLLEN (fromIntegral allocBytes))
-               case mlen of
-                 Nothing -> pure Nothing
-                 Just len -> do
-                   bs <- S.packCStringLen (bufferp, fromIntegral len)
-                   let !v = TextValue (T.decodeUtf16LE bs)
-                   pure (Just v))
-     | colType == sql_wlongvarchar ->
-       let maxChars = coerce (columnSize col) :: Word64
-           allocBytes = maxChars * 2 + 2
-       in putStrLn ("maxChars: " ++ show maxChars) >>
-          withCallocBytes
-            (fromIntegral allocBytes)
-            (\bufferp -> do
-               mlen <-
-                 apply
-                   "sql_wlongvarchar/sql_c_wchar"
-                   sql_c_wchar
-                   (coerce bufferp)
-                   (SQLLEN (fromIntegral allocBytes))
-               case mlen of
-                 Nothing -> pure Nothing
-                 Just len -> do
-                   bs <- S.packCStringLen (bufferp, fromIntegral len)
-                   let !v = TextValue (T.decodeUtf16LE bs)
-                   pure (Just v))
+  if | colType == sql_longvarchar -> getBytesData stmt i
+     | colType == sql_varchar -> getBytesData stmt i
+     | colType == sql_wvarchar -> getTextData stmt i
+     | colType == sql_wlongvarchar -> getTextData stmt i
      | colType == sql_bit ->
        withMalloc
          (\bitPtr -> do
-            mlen <-
-              apply "sql_bit/sql_c_bit" sql_c_bit (coerce bitPtr) (SQLLEN 1)
+            mlen <- getTypedData stmt sql_c_bit i (coerce bitPtr) (SQLLEN 1)
             case mlen of
               Nothing -> pure Nothing
               Just {} ->
@@ -366,12 +301,7 @@ getData stmt i col =
      | colType == sql_double ->
        withMalloc
          (\doublePtr -> do
-            mlen <-
-              apply
-                "sql_double/sql_c_double"
-                sql_c_double
-                (coerce doublePtr)
-                (SQLLEN 8)
+            mlen <- getTypedData stmt sql_c_double i (coerce doublePtr) (SQLLEN 8)
             case mlen of
               Nothing -> pure Nothing
               Just {} -> do
@@ -380,12 +310,7 @@ getData stmt i col =
      | colType == sql_float ->
        withMalloc
          (\doublePtr -> do
-            mlen <-
-              apply
-                "sql_float/sql_c_double"
-                sql_c_double
-                (coerce doublePtr)
-                (SQLLEN 8)
+            mlen <- getTypedData stmt sql_c_double i (coerce doublePtr) (SQLLEN 8)
             case mlen of
               Nothing -> pure Nothing
               Just {} -> do
@@ -394,12 +319,7 @@ getData stmt i col =
      | colType == sql_integer ->
        withMalloc
          (\intPtr -> do
-            mlen <-
-              apply
-                "sql_integer/sql_c_long"
-                sql_c_long
-                (coerce intPtr)
-                (SQLLEN 4)
+            mlen <- getTypedData stmt sql_c_long i (coerce intPtr) (SQLLEN 4)
             case mlen of
               Nothing -> pure Nothing
               Just {} ->
@@ -409,12 +329,7 @@ getData stmt i col =
      | colType == sql_smallint ->
        withMalloc
          (\intPtr -> do
-            mlen <-
-              apply
-                "sql_smallint/sql_c_short"
-                sql_c_short
-                (coerce intPtr)
-                (SQLLEN 2)
+            mlen <- getTypedData stmt sql_c_short i (coerce intPtr) (SQLLEN 2)
             case mlen of
               Nothing -> pure Nothing
               Just {} ->
@@ -429,22 +344,99 @@ getData stmt i col =
              in n))
   where
     colType = columnType col
-    apply label ty bufferp bufferlen =
-      withMalloc
-        (\copiedPtr -> do
-           assertSuccess
-             (label <> "/odbc_SQLGetData")
-             (odbc_SQLGetData
+
+-- | Get the column's data as a vector of bytes.
+getBytesData :: SQLHSTMT s -> SQLUSMALLINT -> IO (Maybe Value)
+getBytesData stmt column = do
+  mavailableBytes <- getSize stmt sql_c_char column
+  case mavailableBytes of
+    Just availableBytes -> do
+      let allocBytes = availableBytes + 1
+      bufferp <- callocBytes (fromIntegral allocBytes)
+      void
+        (getTypedData
+           stmt
+           sql_c_char
+           column
+           (coerce bufferp)
+           (SQLLEN (fromIntegral allocBytes)))
+      bs <- S.unsafePackMallocCStringLen (bufferp, fromIntegral availableBytes)
+      evaluate (Just (BytesValue bs))
+    Nothing -> pure Nothing
+
+-- | Get the column's data as a text string.
+getTextData :: SQLHSTMT s -> SQLUSMALLINT -> IO (Maybe Value)
+getTextData stmt column = do
+  mavailableChars <- getSize stmt sql_c_wchar column
+  case mavailableChars of
+    Nothing -> pure Nothing
+    Just availableBytes -> do
+      let allocBytes = availableBytes + 2
+      withCallocBytes
+        (fromIntegral allocBytes)
+        (\bufferp -> do
+           void
+             (getTypedData
                 stmt
-                (SQLUSMALLINT (fromIntegral i))
-                ty
-                bufferp
-                bufferlen
-                copiedPtr)
-           copiedBytes <- peek copiedPtr
-           if copiedBytes == sql_null_data
-             then pure Nothing
-             else pure (Just (coerce copiedBytes :: Int64)))
+                sql_c_wchar
+                column
+                (coerce bufferp)
+                (SQLLEN (fromIntegral allocBytes)))
+           bs <- S.packCStringLen (bufferp, fromIntegral availableBytes)
+           let !v = TextValue (T.decodeUtf16LE bs)
+           print ("availableBytes",availableBytes,"allocBytes",allocBytes, "text",v)
+           pure (Just v))
+
+-- | Get some data into the given pointer.
+getTypedData ::
+     SQLHSTMT s
+  -> SQLCTYPE
+  -> SQLUSMALLINT
+  -> SQLPOINTER
+  -> SQLLEN
+  -> IO (Maybe Int64)
+getTypedData stmt ty column bufferp bufferlen =
+  withMalloc
+    (\copiedPtr -> do
+       assertSuccess
+         "getTypedData"
+         (odbc_SQLGetData
+            stmt
+            column
+            ty
+            bufferp
+            bufferlen
+            copiedPtr)
+       copiedBytes <- peek copiedPtr
+       if copiedBytes == sql_null_data
+         then pure Nothing
+         else pure (Just (coerce copiedBytes :: Int64)))
+
+-- | Get only the size of the data, no copying.
+getSize :: SQLHSTMT s -> SQLCTYPE -> SQLUSMALLINT -> IO (Maybe Int64)
+getSize stmt ty column =
+  withMalloc
+    (\availablePtr -> do
+       withMalloc
+         (\bufferp ->
+            assertSuccess
+              "getSize"
+              (odbc_SQLGetData
+                 stmt
+                 column
+                 ty
+                 (coerce (bufferp :: Ptr CChar))
+                 0
+                 availablePtr))
+       availableBytes <- peek availablePtr
+       if availableBytes == sql_null_data
+         then pure Nothing
+         else if availableBytes == sql_no_total
+                then throwIO
+                       (NoTotalInformation
+                          (let SQLUSMALLINT i = column
+                           in fromIntegral i))
+                else pure (Just (coerce availableBytes :: Int64)))
 
 --------------------------------------------------------------------------------
 -- Correctness checks
@@ -491,7 +483,7 @@ newtype RETCODE = RETCODE Int16
   deriving (Show, Eq)
 
 -- https://github.com/Microsoft/ODBC-Specification/blob/753d7e714b7eab9eaab4ad6105fdf4267d6ad6f6/Windows/inc/sqltypes.h#L89
-newtype SQLUSMALLINT = SQLUSMALLINT Word16 deriving (Show, Eq, Storable)
+newtype SQLUSMALLINT = SQLUSMALLINT Word16 deriving (Show, Eq, Storable, Enum)
 
 -- https://github.com/Microsoft/ODBC-Specification/blob/753d7e714b7eab9eaab4ad6105fdf4267d6ad6f6/Windows/inc/sqltypes.h#L52..L52
 newtype SQLUCHAR = SQLUCHAR Word8 deriving (Show, Eq, Storable)
@@ -594,6 +586,9 @@ sql_no_data = RETCODE 100
 
 sql_null_data :: SQLLEN
 sql_null_data = (-1)
+
+sql_no_total :: SQLLEN
+sql_no_total = (-4)
 
 --------------------------------------------------------------------------------
 -- SQL data type constants
