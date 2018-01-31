@@ -140,7 +140,7 @@ maxStringLen = 1024
 
 connectionString :: Text
 connectionString =
-  "DRIVER={ODBC Driver 13 for SQL Server};SERVER=192.168.99.100;Uid=SA;Pwd=Passw0rd;Encrypt=no"
+  "DRIVER={ODBC Driver 13 for SQL Server};SERVER=127.0.0.1;Uid=SA;Pwd=Passw0rd;Encrypt=no"
 
 --------------------------------------------------------------------------------
 -- Orphan instances
