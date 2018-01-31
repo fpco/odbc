@@ -10,6 +10,6 @@ before_install:
   - docker pull ubuntu:16.04
 
 script:
-  - docker run -e 'ACCEPT_EULA=Y' -e 'SA_PASSWORD=Passw0rd' -net=host -d microsoft/mssql-server-linux:2017-latest
+  - docker run --net=host -e 'ACCEPT_EULA=Y' -e 'SA_PASSWORD=Passw0rd' -d microsoft/mssql-server-linux:2017-latest
   - docker build . --tag stack-test
-  - docker run -net=host -w /odbc stack-test:latest stack test
+  - docker run --net=host -w /odbc stack-test:latest stack test
