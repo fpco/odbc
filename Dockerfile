@@ -32,4 +32,4 @@ RUN apt-get install -y locales && locale-gen en_US.UTF-8
 
 RUN rm -r odbc; rm odbc.tar.gz; curl https://chrisdone.com/private-toys/odbc.tar.gz > odbc.tar.gz && tar xzf odbc.tar.gz
 
-RUN cd odbc; stack test # --test-arguments "--seed 867408319"
+RUN pwd

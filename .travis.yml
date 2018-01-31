@@ -11,4 +11,5 @@ before_install:
 
 script:
   - docker run -e 'ACCEPT_EULA=Y' -e 'SA_PASSWORD=Passw0rd' -net=host -d microsoft/mssql-server-linux:2017-latest
-  - docker build .
+  - docker build . --tag stack-test
+  - docker run -net=host -w /odbc stack-test:latest stack test
