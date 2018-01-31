@@ -10,8 +10,6 @@ services:
   - docker
 
 before_install:
-  # Both Linux and OS X
-  - docker pull microsoft/mssql-server-linux:2017-GA
   # Linux
   - if [[ $TRAVIS_OS_NAME == 'linux' ]]; then docker pull ubuntu:16.04; fi
 
