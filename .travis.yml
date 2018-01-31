@@ -10,5 +10,5 @@ before_install:
   - docker pull ubuntu:16.04
 
 script:
-  - docker run -e 'ACCEPT_EULA=Y' -e 'SA_PASSWORD=Passw0rd' -p 1433:1433 -d microsoft/mssql-server-linux:2017-latest
+  - docker run -e 'ACCEPT_EULA=Y' -e 'SA_PASSWORD=Passw0rd' -net=host -d microsoft/mssql-server-linux:2017-latest
   - docker build .
