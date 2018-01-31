@@ -33,14 +33,12 @@ import           Control.Exception
 import           Control.Monad
 import           Control.Monad.IO.Class
 import           Data.ByteString (ByteString)
-import qualified Data.ByteString as S
 import qualified Data.ByteString.Unsafe as S
 import           Data.Coerce
 import           Data.Data
 import           Data.Int
 import           Data.Text (Text)
 import qualified Data.Text as T
-import qualified Data.Text.Encoding as T
 import qualified Data.Text.Foreign as T
 import           Foreign hiding (void)
 import           Foreign.C
@@ -372,7 +370,7 @@ getTextData stmt column = do
     Nothing -> pure Nothing
     Just availableBytes -> do
       let allocBytes = availableBytes + 2
-      withCallocBytes
+      withMallocBytes
         (fromIntegral allocBytes)
         (\bufferp -> do
            void
@@ -382,9 +380,8 @@ getTextData stmt column = do
                 column
                 (coerce bufferp)
                 (SQLLEN (fromIntegral allocBytes)))
-           bs <- S.packCStringLen (bufferp, fromIntegral availableBytes)
-           let !v = TextValue (T.decodeUtf16LE bs)
-           print ("availableBytes",availableBytes,"allocBytes",allocBytes, "text",v)
+           t <- T.fromPtr bufferp (fromIntegral (div availableBytes 2))
+           let !v = TextValue t
            pure (Just v))
 
 -- | Get some data into the given pointer.
@@ -568,8 +565,8 @@ foreign import ccall "odbc odbc_SQLDescribeColW"
 withMalloc :: Storable a => (Ptr a -> IO b) -> IO b
 withMalloc m = bracket malloc free m
 
-withCallocBytes :: Storable a => Int -> (Ptr a -> IO b) -> IO b
-withCallocBytes n m = bracket (callocBytes n) free m
+withMallocBytes :: Int -> (Ptr a -> IO b) -> IO b
+withMallocBytes n m = bracket (mallocBytes n) free m
 
 --------------------------------------------------------------------------------
 -- SQL constants
