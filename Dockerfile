@@ -22,6 +22,14 @@ RUN curl https://chrisdone.com/private-toys/odbc.tar.gz > odbc.tar.gz && tar xzf
 
 RUN cd odbc; stack setup
 
+RUN cd odbc; stack build --dependencies-only --test --no-run-tests
+
 # Build and run test suite
 
-RUN cd odbc; stack test
+RUN apt-get install freetds-dev -y
+
+RUN apt-get install -y locales && locale-gen en_US.UTF-8
+
+RUN rm -r odbc; rm odbc.tar.gz; curl https://chrisdone.com/private-toys/odbc.tar.gz > odbc.tar.gz && tar xzf odbc.tar.gz
+
+RUN cd odbc; stack test # --test-arguments "--seed 867408319"
