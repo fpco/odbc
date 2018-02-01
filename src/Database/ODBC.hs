@@ -11,6 +11,61 @@
 {-# LANGUAGE ForeignFunctionInterface #-}
 
 -- | ODBC database API.
+--
+-- You have to compile your projects using the @-threaded@ flag to
+-- GHC. In your .cabal file, this would look like:
+--
+-- @
+-- ghc-options: -threaded
+-- @
+--
+-- An example program using this library:
+--
+-- @
+-- {-\# LANGUAGE OverloadedStrings \#-}
+-- import Database.ODBC
+-- main :: IO ()
+-- main = do
+--   conn <-
+--     connect
+--       "DRIVER={ODBC Driver 13 for SQL Server};SERVER=192.168.99.100;Uid=SA;Pwd=Passw0rd"
+--   exec conn "DROP TABLE IF EXISTS example"
+--   exec conn "CREATE TABLE example (id int, name ntext, likes_tacos bit)"
+--   exec conn "INSERT INTO example VALUES (1, 'Chris', 0), (2, 'Mary', 1)"
+--   rows <- query conn "SELECT * FROM example"
+--   print rows
+--   close conn
+-- @
+--
+-- You need the @OverloadedStrings@ extension so that you can write
+-- 'Text' values for the queries and executions.
+--
+-- The output of this program is to print a list of rows of 'Value':
+--
+-- @
+-- [[Just (IntValue 1),Just (TextValue \"Chris\"),Just (BoolValue False)],[Just (IntValue 2),Just (TextValue \"Mary\"),Just (BoolValue True)]]
+-- @
+--
+-- Proper connection handling should guarantee that a close happens at
+-- the right time. Here is a better way to write it:
+--
+-- @
+-- {-\# LANGUAGE OverloadedStrings \#-}
+-- import Control.Exception
+-- import Database.ODBC
+-- main :: IO ()
+-- main =
+--   bracket
+--     (connect
+--        "DRIVER={ODBC Driver 13 for SQL Server};SERVER=192.168.99.100;Uid=SA;Pwd=Passw0rd")
+--     close
+--     (\\conn -> do
+--        rows <- query conn "SELECT N'Hello, World!'"
+--        print rows)
+-- @
+--
+-- If an exception occurs inside the lambda, 'bracket' ensures that
+-- 'close' is called.
 
 module Database.ODBC
   (
@@ -47,7 +102,9 @@ import           GHC.Generics
 --------------------------------------------------------------------------------
 -- Public types
 
--- | Connection to a database.
+-- | Connection to a database. Use of this connection is
+-- thread-safe. When garbage collected, the connection will be closed
+-- if not done already.
 newtype Connection = Connection
   {connectionMVar :: MVar (Maybe (ForeignPtr EnvAndDbc))}
 
@@ -77,7 +134,10 @@ data Value
     -- ^ A Unicode text value.
   | BytesValue !ByteString
     -- ^ A vector of bytes. It might be a string, but we don't know
-    -- the encoding.
+    -- the encoding. Use 'Data.Text.Encoding.decodeUtf8' if the string
+    -- is UTF-8 encoded, or 'Data.Text.Encoding.decodeUtf16LE' if it
+    -- is UTF-16 encoded. For other encodings, see the Haskell
+    -- text-icu package.
   | BoolValue !Bool
     -- ^ A simple boolean.
   | DoubleValue !Double
@@ -104,8 +164,12 @@ data Column = Column
 -- | Connect using the given connection string.
 connect ::
      MonadIO m
-  => Text -- ^ Connection string.
+  => Text -- ^ An ODBC connection string.
   -> m Connection
+  -- ^ A connection to the database. You should call 'close' on it
+  -- when you're done. If you forget to, then the connection will only
+  -- be closed when there are no more references to the 'Connection'
+  -- value in your program, which might never happen. So take care.
 connect string =
   withBound
     (do envAndDbc <-
@@ -136,7 +200,10 @@ connect string =
 -- | Close the connection. Further use of the 'Connection' will throw
 -- an exception. Double closes also throw an exception to avoid
 -- architectural mistakes.
-close :: MonadIO m => Connection -> m ()
+close ::
+     MonadIO m
+  => Connection -- ^ A connection to the database.
+  -> m ()
 close conn =
   withBound
     (do mstate <- modifyMVar (connectionMVar conn) (pure . (Nothing, ))
@@ -149,7 +216,7 @@ close conn =
 -- | Execute a statement on the database.
 exec ::
      MonadIO m
-  => Connection
+  => Connection -- ^ A connection to the database.
   -> Text -- ^ SQL statement.
   -> m ()
 exec conn string =
@@ -159,9 +226,12 @@ exec conn string =
 -- | Query and return a list of rows.
 query ::
      MonadIO m
-  => Connection
+  => Connection -- ^ A connection to the database.
   -> Text -- ^ SQL query.
   -> m [[Maybe Value]]
+  -- ^ A strict list of rows. This list is not lazy, so if you are
+  -- retrieving a large data set, be aware that all of it will be
+  -- loaded into memory.
 query conn string =
   withBound
     (withHDBC
