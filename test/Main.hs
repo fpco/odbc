@@ -30,9 +30,7 @@ main = hspec spec
 
 spec :: Spec
 spec = do
-  describe
-    "Connectivity"
-    connectivity
+  describe "Connectivity" connectivity
   describe "Data retrieval" dataRetrieval
 
 connectivity :: Spec
@@ -55,7 +53,7 @@ connectivity = do
        (== DatabaseAlreadyClosed))
   it
     "Connect/disconnect loop"
-    (do sequence_ [connectWithString >>= close | _ <- [1::Int ..10]]
+    (do sequence_ [connectWithString >>= close | _ <- [1 :: Int .. 10]]
         shouldBe True True)
 
 dataRetrieval :: Spec
