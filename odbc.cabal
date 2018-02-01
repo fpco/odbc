@@ -25,7 +25,8 @@ library
     deepseq,
     async,
     bytestring,
-    text
+    text,
+    unliftio-core
 
 test-suite test
   type: exitcode-stdio-1.0

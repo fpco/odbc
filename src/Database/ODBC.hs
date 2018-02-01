@@ -11,6 +11,56 @@
 {-# LANGUAGE ForeignFunctionInterface #-}
 
 -- | ODBC database API.
+
+module Database.ODBC
+  ( -- * Building
+    -- $building
+
+    -- * Basic library usage
+    -- $usage
+
+    -- * Connect/disconnect
+    connect
+  , close
+  , Connection
+
+    -- * Executing queries
+  , exec
+  , query
+  , Value(..)
+
+    -- * Streaming results
+    -- $streaming
+
+  , stream
+  , Step(..)
+
+    -- * Exceptions
+    -- $exceptions
+
+  , ODBCException(..)
+  ) where
+
+import           Control.Concurrent.Async
+import           Control.Concurrent.MVar
+import           Control.DeepSeq
+import           Control.Exception
+import           Control.Monad
+import           Control.Monad.IO.Class
+import Control.Monad.IO.Unlift
+import           Data.ByteString (ByteString)
+import qualified Data.ByteString.Unsafe as S
+import           Data.Coerce
+import           Data.Data
+import           Data.Int
+import           Data.Text (Text)
+import qualified Data.Text as T
+import qualified Data.Text.Foreign as T
+import           Foreign hiding (void)
+import           Foreign.C
+import           GHC.Generics
+
+-- $building
 --
 -- You have to compile your projects using the @-threaded@ flag to
 -- GHC. In your .cabal file, this would look like:
@@ -18,6 +68,8 @@
 -- @
 -- ghc-options: -threaded
 -- @
+
+-- $usage
 --
 -- An example program using this library:
 --
@@ -31,7 +83,7 @@
 --       "DRIVER={ODBC Driver 13 for SQL Server};SERVER=192.168.99.100;Uid=SA;Pwd=Passw0rd"
 --   exec conn "DROP TABLE IF EXISTS example"
 --   exec conn "CREATE TABLE example (id int, name ntext, likes_tacos bit)"
---   exec conn "INSERT INTO example VALUES (1, 'Chris', 0), (2, 'Mary', 1)"
+--   exec conn "INSERT INTO example VALUES (1, \'Chris\', 0), (2, \'Mary\', 1)"
 --   rows <- query conn "SELECT * FROM example"
 --   print rows
 --   close conn
@@ -45,6 +97,8 @@
 -- @
 -- [[Just (IntValue 1),Just (TextValue \"Chris\"),Just (BoolValue False)],[Just (IntValue 2),Just (TextValue \"Mary\"),Just (BoolValue True)]]
 -- @
+
+-- $exceptions
 --
 -- Proper connection handling should guarantee that a close happens at
 -- the right time. Here is a better way to write it:
@@ -67,37 +121,47 @@
 -- If an exception occurs inside the lambda, 'bracket' ensures that
 -- 'close' is called.
 
-module Database.ODBC
-  (
-    -- * Connection
-    connect
-  , close
-    -- * Executing queries
-  , exec
-  , query
-    -- * Types
-  , Value(..)
-  , Connection
-  , ODBCException(..)
-  ) where
-
-import           Control.Concurrent.Async
-import           Control.Concurrent.MVar
-import           Control.DeepSeq
-import           Control.Exception
-import           Control.Monad
-import           Control.Monad.IO.Class
-import           Data.ByteString (ByteString)
-import qualified Data.ByteString.Unsafe as S
-import           Data.Coerce
-import           Data.Data
-import           Data.Int
-import           Data.Text (Text)
-import qualified Data.Text as T
-import qualified Data.Text.Foreign as T
-import           Foreign hiding (void)
-import           Foreign.C
-import           GHC.Generics
+-- $streaming
+--
+-- Loading all rows of a query result can be expensive and use a lot
+-- of memory. Another way to load data is by fetching one row at a
+-- time, called streaming.
+--
+-- Here's an example of finding the longest string from a set of
+-- rows. It outputs @"Hello!"@. We only work on 'TextValue', we ignore
+-- for example the @NULL@ row.
+--
+-- @
+-- {-\# LANGUAGE OverloadedStrings, LambdaCase \#-}
+-- import qualified Data.Text as T
+-- import           Control.Exception
+-- import           Database.ODBC
+-- main :: IO ()
+-- main =
+--   bracket
+--     (connect
+--        \"DRIVER={ODBC Driver 13 for SQL Server};SERVER=192.168.99.100;Uid=SA;Pwd=Passw0rd\")
+--     close
+--     (\\conn -> do
+--        exec conn \"DROP TABLE IF EXISTS example\"
+--        exec conn \"CREATE TABLE example (name ntext)\"
+--        exec conn \"INSERT INTO example VALUES (\'foo\'),(\'bar\'),(NULL),(\'mu\'),(\'Hello!\')\"
+--        longest <-
+--          stream
+--            conn
+--            \"SELECT * FROM example\"
+--            (\\longest ->
+--               \\case
+--                 [Just (TextValue text)] ->
+--                   pure
+--                     (Continue
+--                        (if T.length text > T.length longest
+--                           then text
+--                           else longest))
+--                 _ -> pure (Continue longest))
+--            \"\"
+--        print longest)
+-- @
 
 --------------------------------------------------------------------------------
 -- Public types
@@ -108,7 +172,8 @@ import           GHC.Generics
 newtype Connection = Connection
   {connectionMVar :: MVar (Maybe (ForeignPtr EnvAndDbc))}
 
--- | A database exception.
+-- | A database exception. Any of the functions in this library may
+-- throw this exception type.
 data ODBCException
   = UnsuccessfulReturnCode !String
                            !Int16
@@ -146,6 +211,12 @@ data Value
     -- ^ Integer values that fit in an 'Int'.
   deriving (Eq, Show, Typeable, Ord, Generic, Data)
 instance NFData Value
+
+-- | A step in the streaming process for the 'stream' function.
+data Step a
+  = Stop !a     -- ^ Stop with this value.
+  | Continue !a -- ^ Continue with this value.
+  deriving (Show)
 
 --------------------------------------------------------------------------------
 -- Internal types
@@ -239,6 +310,27 @@ query conn string =
        "query"
        (\dbc -> withExecDirect dbc string fetchStatementRows))
 
+-- | Stream results like a fold with the option to stop at any time.
+stream ::
+     (MonadIO m, MonadUnliftIO m)
+  => Connection -- ^ A connection to the database.
+  -> Text -- ^ SQL query.
+  -> (state -> [Maybe Value] -> m (Step state))
+  -- ^ A stepping function that gets as input the current @state@ and
+  -- a row, returning either a new @state@ or a final @result@.
+  -> state
+  -- ^ A state that you can use for the computation. Strictly
+  -- evaluated each iteration.
+  -> m state
+  -- ^ Final result, produced by the stepper function.
+stream conn string step state =
+  do unlift <- askUnliftIO
+     withBound
+       (withHDBC
+          conn
+          "stream"
+          (\dbc -> withExecDirect dbc string (fetchIterator unlift step state)))
+
 --------------------------------------------------------------------------------
 -- Internal wrapper functions
 
@@ -283,6 +375,42 @@ withBound = liftIO . flip withAsyncBound wait
 
 --------------------------------------------------------------------------------
 -- Internal data retrieval functions
+
+-- | Iterate over the rows in the statement.
+fetchIterator ::
+     UnliftIO m
+  -> (state -> [Maybe Value] -> m (Step state))
+  -> state
+  -> SQLHSTMT s
+  -> IO state
+fetchIterator (UnliftIO runInIO) step state0 stmt = do
+  SQLSMALLINT cols <-
+    liftIO
+      (withMalloc
+         (\sizep -> do
+            assertSuccess
+              "odbc_SQLNumResultCols"
+              (odbc_SQLNumResultCols stmt sizep)
+            peek sizep))
+  types <- mapM (describeColumn stmt) [1 .. cols]
+  let loop state = do
+        do retcode0 <- odbc_SQLFetch stmt
+           if | retcode0 == sql_no_data ->
+                do retcode <- odbc_SQLMoreResults stmt
+                   if retcode == sql_success || retcode == sql_success_with_info
+                     then loop state
+                     else pure state
+              | retcode0 == sql_success || retcode0 == sql_success_with_info ->
+                do row <-
+                     sequence (zipWith (getData stmt) [SQLUSMALLINT 1 ..] types)
+                   !state' <- runInIO (step state row)
+                   case state' of
+                     Stop state'' -> pure state''
+                     Continue state'' -> loop state''
+              | otherwise ->
+                throwIO
+                  (UnsuccessfulReturnCode "odbc_SQLFetch" (coerce retcode0))
+  loop state0
 
 -- | Fetch all rows from a statement.
 fetchStatementRows :: SQLHSTMT s -> IO [[Maybe Value]]
