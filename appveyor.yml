@@ -1,0 +1,40 @@
+version: 1.0.{build}
+image: Visual Studio 2015
+
+build: off
+
+environment:
+  global:
+    # Avoid long paths on Windows
+    STACK_ROOT: "c:\\s"
+    STACK_WORK: ".w"
+    WORK_DIR: "c:\\w"
+    ODBC_TEST_CONNECTION_STRING: "DRIVER={ODBC Driver 13 for SQL Server};Server=(local)\\SQL2017;User ID=sa;Password=Password12!"
+
+services:
+  - mssql2017
+
+before_test:
+# Avoid long paths not to each MAX_PATH of 260 chars
+- xcopy /q /s /e /r /k /i /v /h /y "%APPVEYOR_BUILD_FOLDER%" "%WORK_DIR%"
+- cd "%WORK_DIR%"
+
+# Install stack
+- ps: Start-FileDownload http://www.stackage.org/stack/windows-x86_64 -FileName stack.zip
+- 7z x stack.zip stack.exe
+
+test_script:
+  - cd "%WORK_DIR%"
+  - stack --verbosity warn setup --no-reinstall > nul
+  - stack test
+      -j 1
+      --no-terminal
+      --local-bin-path %SYSTEMROOT%\system32
+      --extra-lib-dirs="%WORK_DIR%"
+
+# Uncomment these two lines if you need to RPD into the VM to debug something
+
+# init:
+#   - ps: iex ((new-object net.webclient).DownloadString('https://raw.githubusercontent.com/appveyor/ci/master/scripts/enable-rdp.ps1'))
+# on_finish:
+#   - ps: $blockRdp = $true; iex ((new-object net.webclient).DownloadString('https://raw.githubusercontent.com/appveyor/ci/master/scripts/enable-rdp.ps1'))
