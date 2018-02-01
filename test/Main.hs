@@ -53,6 +53,10 @@ connectivity = do
            close c
            close c)
        (== DatabaseAlreadyClosed))
+  it
+    "Connect/disconnect loop"
+    (do sequence_ [connectWithString >>= close | _ <- [1::Int ..10]]
+        shouldBe True True)
 
 dataRetrieval :: Spec
 dataRetrieval = do
