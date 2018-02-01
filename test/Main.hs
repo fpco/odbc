@@ -16,6 +16,7 @@ import           Data.Monoid
 import           Data.Text (Text)
 import qualified Data.Text as T
 import           Database.ODBC
+import           System.Environment
 import           Test.Hspec
 import           Test.QuickCheck
 import           Test.QuickCheck.Monadic
@@ -34,22 +35,21 @@ spec = do
     connectivity
   describe "Data retrieval" dataRetrieval
 
-
 connectivity :: Spec
 connectivity = do
   it
     "Connect, no close"
-    (do _ <- connect connectionString
+    (do _ <- connectWithString
         shouldBe True True)
   it
     "Connect, explicit close"
-    (do c <- connect connectionString
+    (do c <- connectWithString
         close c
         shouldBe True True)
   it
     "Double close fails"
     (shouldThrow
-       (do c <- connect connectionString
+       (do c <- connectWithString
            close c
            close c)
        (== DatabaseAlreadyClosed))
@@ -58,7 +58,7 @@ dataRetrieval :: Spec
 dataRetrieval = do
   it
     "Simple back and forth"
-    (do c <- connect connectionString
+    (do c <- connectWithString
         exec c "DROP TABLE IF EXISTS test"
         exec c "CREATE TABLE test (int integer, text text, bool bit, nt ntext)"
         exec
@@ -94,7 +94,7 @@ quickCheckIt :: (Show t, Arbitrary t) => Text -> (t -> Value) -> (t -> Text) -> 
 quickCheckIt typ cons shower =
   around
     (bracket
-       (do c <- connect connectionString
+       (do c <- connectWithString
            exec c "DROP TABLE IF EXISTS test"
            exec c ("CREATE TABLE test (f " <> typ <> ")")
            pure c)
@@ -138,9 +138,16 @@ validTextChar = \c -> c /= '\'' && c /= '\n' && c /= '\r'
 maxStringLen :: Int
 maxStringLen = 1024
 
-connectionString :: Text
-connectionString =
-  "DRIVER={ODBC Driver 13 for SQL Server};SERVER=127.0.0.1;Uid=SA;Pwd=Passw0rd;Encrypt=no"
+connectWithString :: IO Connection
+connectWithString = do
+  mconnStr <- lookupEnv "ODBC_TEST_CONNECTION_STRING"
+  case mconnStr of
+    Nothing ->
+      error
+        "Need ODBC_TEST_CONNECTION_STRING environment variable.\n\
+        \Example:\n\
+        \ODBC_TEST_CONNECTION_STRING='DRIVER={ODBC Driver 13 for SQL Server};SERVER=127.0.0.1;Uid=SA;Pwd=Passw0rd;Encrypt=no'"
+    Just connStr -> connect (T.pack connStr)
 
 --------------------------------------------------------------------------------
 -- Orphan instances
