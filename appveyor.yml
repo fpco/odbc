@@ -24,13 +24,13 @@ before_test:
 - 7z x stack.zip stack.exe
 
 # Install ODBC drivers
-- Write-Host "Installing ODBC driver..." -ForegroundColor Cyan
-- Write-Host "Downloading..."
-- $msiPath = "$($env:USERPROFILE)\msodbcsql.msi"
-- (New-Object Net.WebClient).DownloadFile('https://download.microsoft.com/download/D/5/E/D5EEF288-A277-45C8-855B-8E2CB7E25B96/x64/msodbcsql.msi', $msiPath)
-- Write-Host "Installing..."
-- cmd /c start /wait msiexec /i "$msiPath" /q
-- del $msiPath
+- ps: Write-Host "Installing ODBC driver..." -ForegroundColor Cyan
+- ps: Write-Host "Downloading..."
+- ps: $msiPath = "$($env:USERPROFILE)\msodbcsql.msi"
+- ps: (New-Object Net.WebClient).DownloadFile('https://download.microsoft.com/download/D/5/E/D5EEF288-A277-45C8-855B-8E2CB7E25B96/x64/msodbcsql.msi', $msiPath)
+- ps: Write-Host "Installing..."
+- ps: cmd /c start /wait msiexec /i "$msiPath" /q
+- ps: del $msiPath
 
 test_script:
   - cd "%WORK_DIR%"
