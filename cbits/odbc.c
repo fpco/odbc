@@ -1,3 +1,6 @@
+#ifdef _WIN32
+#include <windows.h>
+#endif
 #include <sql.h>
 #include <sqlext.h>
 #include <sqltypes.h>
@@ -13,7 +16,6 @@
 #define FALSE 0
 #define TRUE 1
 #define MAXBUFLEN 256
-#define MAXNAME 256
 
 // Just a way of grouping together these two dependent resources. It's
 // probably not a good idea to free up an environment before freeing a
@@ -292,14 +294,14 @@ void odbc_ProcessLogMessages(SQLSMALLINT plm_handle_type, SQLHANDLE plm_handle, 
       }
 
       printf("szSqlState = %s\n", plm_szSqlState);
-      printf("pfNativeError = %d\n", plm_pfNativeError);
+     // printf("pfNativeError = %d\n", plm_pfNativeError);
       printf("szErrorMsg = %s\n", plm_szErrorMsg);
       printf("pcbErrorMsg = %d\n\n", plm_pcbErrorMsg);
 
       if (ConnInd) {
-        printf("ODBCRowNumber = %d\n", plm_Rownumber);
-        printf("SSrvrLine = %d\n", plm_Rownumber);
-        printf("SSrvrMsgState = %d\n", plm_SS_MsgState);
+        // printf("ODBCRowNumber = %d\n", plm_Rownumber);
+        //  printf("SSrvrLine = %d\n", plm_Rownumber);
+        // printf("SSrvrMsgState = %d\n", plm_SS_MsgState);
         /* printf("SSrvrSeverity = %d\n", plm_SS_Severity); */
         /* printf("SSrvrProcname = %s\n", plm_SS_Procname); */
         /* printf("SSrvrSrvname = %s\n\n", plm_SS_Srvname); */
