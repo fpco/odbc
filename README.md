@@ -39,7 +39,8 @@ functions like `SQLDriverConnectW` will call that library.
 
 In recent years, Microsoft has released binary drivers for SQL Server
 for Windows, Linux and OS X, with a guide for each operating
-system. That guide is
+system. That guide for the latest and greatest official Microsoft
+driver is
 [here](https://docs.microsoft.com/en-us/sql/connect/odbc/linux-mac/installing-the-microsoft-odbc-driver-for-sql-server).
 
 I have tested the OS X instructions on my own machine.
