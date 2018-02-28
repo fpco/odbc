@@ -1,4 +1,6 @@
 {-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE ViewPatterns #-}
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 {-# LANGUAGE OverloadedStrings #-}
@@ -60,41 +62,100 @@ connectivity = do
 dataRetrieval :: Spec
 dataRetrieval = do
   it
-    "Simple back and forth"
+    "Basic sanity check"
     (do c <- connectWithString
         exec c "DROP TABLE IF EXISTS test"
-        exec c "CREATE TABLE test (int integer, text text, bool bit, nt ntext)"
         exec
           c
-          "INSERT INTO test VALUES (123, 'abc', 1, 'wib'), (456, 'def', 0, 'wibble'), (NULL, NULL, NULL, NULL)"
-        _ <- query c "SELECT * FROM test"
+          "CREATE TABLE test (int integer, text text, bool bit, nt ntext, fl float)"
+        exec
+          c
+          "INSERT INTO test VALUES (123, 'abc', 1, 'wib', 2.415), (456, 'def', 0, 'wibble',0.9999999999999), (NULL, NULL, NULL, NULL, NULL)"
+        rows <- query c "SELECT * FROM test"
         close c
-        shouldBe True True)
-  quickCheckIt "integer" IntValue (T.pack . show)
-  quickCheckIt "int" IntValue (T.pack . show)
-  quickCheckIt "float" DoubleValue (T.pack . printf "%f")
-  quickCheckIt "ntext" TextValue showText
-  quickCheckIt "text" BytesValue showBytes
+        shouldBe
+          rows
+          [ [ Just (IntValue 123)
+            , Just (BytesValue "abc")
+            , Just (BoolValue True)
+            , Just (TextValue "wib")
+            , Just (DoubleValue 2.415)
+            ]
+          , [ Just (IntValue 456)
+            , Just (BytesValue "def")
+            , Just (BoolValue False)
+            , Just (TextValue "wibble")
+            , Just (DoubleValue 0.9999999999999)
+            ]
+          , [Nothing, Nothing, Nothing, Nothing, Nothing]
+          ])
+  quickCheckIt
+    "integer"
+    (T.pack . show)
+    (\case
+       IntValue b -> pure b
+       _ -> Nothing)
+  quickCheckIt
+    "int"
+    (T.pack . show)
+    (\case
+       IntValue b -> pure b
+       _ -> Nothing)
+  quickCheckIt
+    "float"
+    (T.pack . printf "%f")
+    (\case
+       DoubleValue b -> pure (realToFrac b :: Double)
+       _ -> Nothing)
+  quickCheckIt
+    "float"
+    (T.pack . printf "%f")
+    (\case
+       DoubleValue b -> pure (realToFrac b :: Float)
+       _ -> Nothing)
+  quickCheckIt
+    "ntext"
+    showText
+    (\case
+       TextValue b -> pure b
+       _ -> Nothing)
+  quickCheckIt
+    "text"
+    showBytes
+    (\case
+       BytesValue b -> pure b
+       _ -> Nothing)
   quickCheckIt
     ("nvarchar(" <> T.pack (show maxStringLen) <> ")")
-    TextValue
     showText
+    (\case
+       TextValue b -> pure b
+       _ -> Nothing)
   quickCheckIt
     ("varchar(" <> T.pack (show maxStringLen) <> ")")
-    BytesValue
     showBytes
+    (\case
+       BytesValue b -> pure b
+       _ -> Nothing)
   quickCheckIt
     "bit"
-    BoolValue
     (\case
        True -> "1"
        False -> "0")
+    (\case
+       BoolValue b -> pure b
+       _ -> Nothing)
 
 --------------------------------------------------------------------------------
 -- Combinators
 
-quickCheckIt :: (Show t, Arbitrary t) => Text -> (t -> Value) -> (t -> Text) -> Spec
-quickCheckIt typ cons shower =
+quickCheckIt ::
+     forall t. (Eq t, Show t, Arbitrary t)
+  => Text
+  -> (t -> Text)
+  -> (Value -> Maybe t)
+  -> Spec
+quickCheckIt typ shower unpack =
   around
     (bracket
        (do c <- connectWithString
@@ -116,19 +177,35 @@ quickCheckIt typ cons shower =
                                 onException
                                   (query c "SELECT * FROM test")
                                   (putStrLn "Query failed!")))
-                     let expected :: Either ODBCException [[Maybe Value]]
-                         expected = Right [[Just (cons input)]]
+                     let expected :: Either String t
+                         expected = Right input
+                         result :: Either String t
+                         result =
+                           case rows of
+                             Right [[Just x]] ->
+                               case unpack x of
+                                 Nothing -> Left "Couldn't unpack value."
+                                 Just v -> pure v
+                             Left (_ :: SomeException) ->
+                               Left "Couldn't get value from row in test suite."
+                     when
+                       (result /= expected)
+                       (liftIO
+                          (putStr
+                             (unlines
+                                [ "Expected: " ++ show expected
+                                , "Actual: " ++ show rows
+                                , "Query was: " ++ show q
+                                , "QuickCheck value: " ++ show input
+                                ])))
                      monitor
                        (counterexample
-                          (show rows ++
-                           " should be " ++
-                           show expected ++ "\n\nfor query: " <> T.unpack q))
-                     when
-                       (rows /= expected)
-                       (liftIO
-                          (putStrLn
-                             ("Assertion failed: " ++ show (rows, expected))))
-                     assert (rows == expected)))))
+                          (unlines
+                             [ "Expected: " ++ show expected
+                             , "Actual: " ++ show rows
+                             , "Query was: " ++ show q
+                             ]))
+                     assert (result == expected)))))
 
 --------------------------------------------------------------------------------
 -- Helpers

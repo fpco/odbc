@@ -505,12 +505,14 @@ getData stmt i col =
                 pure (Just d))
      | colType == sql_float ->
        withMalloc
-         (\doublePtr -> do
-            mlen <- getTypedData stmt sql_c_double i (coerce doublePtr) (SQLLEN 8)
+         (\floatPtr -> do
+            mlen <- getTypedData stmt sql_c_float i (coerce floatPtr) (SQLLEN 8)
+            -- Floats are covered by doubles too:
+            -- https://docs.microsoft.com/en-us/sql/odbc/reference/appendixes/c-data-types
             case mlen of
               Nothing -> pure Nothing
               Just {} -> do
-                !d <- fmap DoubleValue (peek doublePtr)
+                !d <- fmap DoubleValue (peek floatPtr)
                 pure (Just d))
      | colType == sql_integer ->
        withMalloc
@@ -877,6 +879,9 @@ sql_c_char = coerce sql_char
 
 sql_c_double :: SQLCTYPE
 sql_c_double = coerce sql_double
+
+sql_c_float :: SQLCTYPE
+sql_c_float = coerce sql_double
 
 sql_c_long :: SQLCTYPE
 sql_c_long = coerce sql_integer
