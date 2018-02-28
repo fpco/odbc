@@ -410,7 +410,9 @@ fetchIterator (UnliftIO runInIO) step state0 stmt = do
               | otherwise ->
                 throwIO
                   (UnsuccessfulReturnCode "odbc_SQLFetch" (coerce retcode0))
-  loop state0
+  if cols > 0
+     then loop state0
+     else pure state0
 
 -- | Fetch all rows from a statement.
 fetchStatementRows :: SQLHSTMT s -> IO [[Maybe Value]]
@@ -437,7 +439,9 @@ fetchStatementRows stmt = do
                    loop (rows . (fields :))
               | otherwise ->
                 throwIO (UnsuccessfulReturnCode "odbc_SQLFetch" (coerce retcode0))
-  loop id
+  if cols > 0
+     then loop id
+     else pure []
 
 -- | Describe the given column by its integer index.
 describeColumn :: SQLHSTMT s -> Int16 -> IO Column

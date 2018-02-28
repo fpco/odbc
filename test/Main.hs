@@ -89,6 +89,17 @@ dataRetrieval = do
             ]
           , [Nothing, Nothing, Nothing, Nothing, Nothing]
           ])
+  it
+    "Querying commands with no results"
+    (do c <- connectWithString
+        rows1 <- query c "DROP TABLE IF EXISTS no_such_table"
+        rows2 <-
+          stream
+            c
+            "DROP TABLE IF EXISTS no_such_table"
+            (\s _ -> pure (Stop s))
+            []
+        shouldBe (rows1 ++ rows2) [])
   quickCheckIt
     "integer"
     (T.pack . show)
