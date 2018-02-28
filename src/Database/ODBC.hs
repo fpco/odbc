@@ -177,6 +177,7 @@ newtype Connection = Connection
 data ODBCException
   = UnsuccessfulReturnCode !String
                            !Int16
+                           !String
     -- ^ An ODBC operation failed with the given return code.
   | AllocationReturnedNull !String
     -- ^ Allocating an ODBC resource failed.
@@ -243,11 +244,10 @@ connect ::
   -- value in your program, which might never happen. So take care.
 connect string =
   withBound
-    (do envAndDbc <-
+    (do (ptr, envAndDbc) <-
           uninterruptibleMask_
-            (do ptr <-
-                  assertNotNull "odbc_AllocEnvAndDbc" odbc_AllocEnvAndDbc
-                newForeignPtr odbc_FreeEnvAndDbc (coerce ptr))
+            (do ptr <- assertNotNull "odbc_AllocEnvAndDbc" odbc_AllocEnvAndDbc
+                fmap (ptr, ) (newForeignPtr odbc_FreeEnvAndDbc (coerce ptr)))
              -- Above: Allocate the environment.
              -- Below: Try to connect to the database.
         T.useAsPtr
@@ -255,6 +255,7 @@ connect string =
           (\wstring len ->
              uninterruptibleMask_
                (do assertSuccess
+                     ptr
                      "odbc_SQLDriverConnectW"
                      (withForeignPtr
                         envAndDbc
@@ -308,7 +309,7 @@ query conn string =
     (withHDBC
        conn
        "query"
-       (\dbc -> withExecDirect dbc string fetchStatementRows))
+       (\dbc -> withExecDirect dbc string (fetchStatementRows dbc)))
 
 -- | Stream results like a fold with the option to stop at any time.
 stream ::
@@ -329,7 +330,7 @@ stream conn string step state =
        (withHDBC
           conn
           "stream"
-          (\dbc -> withExecDirect dbc string (fetchIterator unlift step state)))
+          (\dbc -> withExecDirect dbc string (fetchIterator dbc unlift step state)))
 
 --------------------------------------------------------------------------------
 -- Internal wrapper functions
@@ -354,11 +355,12 @@ withExecDirect dbc string cont =
     dbc
     (\stmt -> do
        assertSuccess
+         dbc
          "odbc_SQLExecDirectW"
          (T.useAsPtr
             string
             (\wstring len ->
-               odbc_SQLExecDirectW stmt (coerce wstring) (fromIntegral len)))
+               odbc_SQLExecDirectW dbc stmt (coerce wstring) (fromIntegral len)))
        cont stmt)
 
 -- | Run the function with a statement.
@@ -378,74 +380,85 @@ withBound = liftIO . flip withAsyncBound wait
 
 -- | Iterate over the rows in the statement.
 fetchIterator ::
-     UnliftIO m
+     Ptr EnvAndDbc
+  -> UnliftIO m
   -> (state -> [Maybe Value] -> m (Step state))
   -> state
   -> SQLHSTMT s
   -> IO state
-fetchIterator (UnliftIO runInIO) step state0 stmt = do
+fetchIterator dbc (UnliftIO runInIO) step state0 stmt = do
   SQLSMALLINT cols <-
     liftIO
       (withMalloc
          (\sizep -> do
             assertSuccess
+              dbc
               "odbc_SQLNumResultCols"
               (odbc_SQLNumResultCols stmt sizep)
             peek sizep))
-  types <- mapM (describeColumn stmt) [1 .. cols]
+  types <- mapM (describeColumn dbc stmt) [1 .. cols]
   let loop state = do
-        do retcode0 <- odbc_SQLFetch stmt
+        do retcode0 <- odbc_SQLFetch dbc stmt
            if | retcode0 == sql_no_data ->
-                do retcode <- odbc_SQLMoreResults stmt
+                do retcode <- odbc_SQLMoreResults dbc stmt
                    if retcode == sql_success || retcode == sql_success_with_info
                      then loop state
                      else pure state
               | retcode0 == sql_success || retcode0 == sql_success_with_info ->
                 do row <-
-                     sequence (zipWith (getData stmt) [SQLUSMALLINT 1 ..] types)
+                     sequence
+                       (zipWith (getData dbc stmt) [SQLUSMALLINT 1 ..] types)
                    !state' <- runInIO (step state row)
                    case state' of
                      Stop state'' -> pure state''
                      Continue state'' -> loop state''
               | otherwise ->
                 throwIO
-                  (UnsuccessfulReturnCode "odbc_SQLFetch" (coerce retcode0))
+                  (UnsuccessfulReturnCode
+                     "odbc_SQLFetch"
+                     (coerce retcode0)
+                     "Unexpected return code")
   if cols > 0
-     then loop state0
-     else pure state0
+    then loop state0
+    else pure state0
 
 -- | Fetch all rows from a statement.
-fetchStatementRows :: SQLHSTMT s -> IO [[Maybe Value]]
-fetchStatementRows stmt = do
+fetchStatementRows :: Ptr EnvAndDbc -> SQLHSTMT s -> IO [[Maybe Value]]
+fetchStatementRows dbc stmt = do
   SQLSMALLINT cols <-
     withMalloc
       (\sizep -> do
          assertSuccess
+           dbc
            "odbc_SQLNumResultCols"
            (odbc_SQLNumResultCols stmt sizep)
          peek sizep)
-  types <- mapM (describeColumn stmt) [1 .. cols]
+  types <- mapM (describeColumn dbc stmt) [1 .. cols]
   let loop rows = do
-        do retcode0 <- odbc_SQLFetch stmt
+        do retcode0 <- odbc_SQLFetch dbc stmt
            if | retcode0 == sql_no_data ->
-                do retcode <- odbc_SQLMoreResults stmt
-                   if retcode == sql_success ||
-                      retcode == sql_success_with_info
+                do retcode <- odbc_SQLMoreResults dbc stmt
+                   if retcode == sql_success || retcode == sql_success_with_info
                      then loop rows
                      else pure (rows [])
-              | retcode0 == sql_success ||
-                  retcode0 == sql_success_with_info ->
-                do fields <- sequence (zipWith (getData stmt) [SQLUSMALLINT 1 ..] types)
+              | retcode0 == sql_success || retcode0 == sql_success_with_info ->
+                do fields <-
+                     sequence
+                       (zipWith (getData dbc stmt) [SQLUSMALLINT 1 ..] types)
                    loop (rows . (fields :))
               | otherwise ->
-                throwIO (UnsuccessfulReturnCode "odbc_SQLFetch" (coerce retcode0))
+                throwIO
+                  (UnsuccessfulReturnCode
+                     "odbc_SQLFetch"
+                     (coerce retcode0)
+                     "Unexpected return code")
   if cols > 0
-     then loop id
-     else pure []
+    then loop id
+    else pure []
 
 -- | Describe the given column by its integer index.
-describeColumn :: SQLHSTMT s -> Int16 -> IO Column
-describeColumn stmt i =
+describeColumn :: Ptr EnvAndDbc -> SQLHSTMT s -> Int16 -> IO Column
+describeColumn dbPtr stmt i =
   T.useAsPtr
     (T.replicate 1000 "0")
     (\namep namelen ->
@@ -460,6 +473,7 @@ describeColumn stmt i =
                              withMalloc
                                (\nullp -> do
                                   assertSuccess
+                                    dbPtr
                                     "odbc_SQLDescribeColW"
                                     (odbc_SQLDescribeColW
                                        stmt
@@ -484,16 +498,16 @@ describeColumn stmt i =
                                     }))))))))
 
 -- | Pull data for the given column.
-getData :: SQLHSTMT s -> SQLUSMALLINT -> Column -> IO (Maybe Value)
-getData stmt i col =
-  if | colType == sql_longvarchar -> getBytesData stmt i
-     | colType == sql_varchar -> getBytesData stmt i
-     | colType == sql_wvarchar -> getTextData stmt i
-     | colType == sql_wlongvarchar -> getTextData stmt i
+getData :: Ptr EnvAndDbc -> SQLHSTMT s -> SQLUSMALLINT -> Column -> IO (Maybe Value)
+getData dbc stmt i col =
+  if | colType == sql_longvarchar -> getBytesData dbc stmt i
+     | colType == sql_varchar -> getBytesData dbc stmt i
+     | colType == sql_wvarchar -> getTextData dbc stmt i
+     | colType == sql_wlongvarchar -> getTextData dbc stmt i
      | colType == sql_bit ->
        withMalloc
          (\bitPtr -> do
-            mlen <- getTypedData stmt sql_c_bit i (coerce bitPtr) (SQLLEN 1)
+            mlen <- getTypedData dbc stmt sql_c_bit i (coerce bitPtr) (SQLLEN 1)
             case mlen of
               Nothing -> pure Nothing
               Just {} ->
@@ -501,7 +515,7 @@ getData stmt i col =
      | colType == sql_double ->
        withMalloc
          (\doublePtr -> do
-            mlen <- getTypedData stmt sql_c_double i (coerce doublePtr) (SQLLEN 8)
+            mlen <- getTypedData dbc stmt sql_c_double i (coerce doublePtr) (SQLLEN 8)
             case mlen of
               Nothing -> pure Nothing
               Just {} -> do
@@ -510,7 +524,7 @@ getData stmt i col =
      | colType == sql_float ->
        withMalloc
          (\floatPtr -> do
-            mlen <- getTypedData stmt sql_c_float i (coerce floatPtr) (SQLLEN 8)
+            mlen <- getTypedData dbc stmt sql_c_float i (coerce floatPtr) (SQLLEN 8)
             -- Floats are covered by doubles too:
             -- https://docs.microsoft.com/en-us/sql/odbc/reference/appendixes/c-data-types
             case mlen of
@@ -521,7 +535,7 @@ getData stmt i col =
      | colType == sql_integer ->
        withMalloc
          (\intPtr -> do
-            mlen <- getTypedData stmt sql_c_long i (coerce intPtr) (SQLLEN 4)
+            mlen <- getTypedData dbc stmt sql_c_long i (coerce intPtr) (SQLLEN 4)
             case mlen of
               Nothing -> pure Nothing
               Just {} ->
@@ -531,7 +545,7 @@ getData stmt i col =
      | colType == sql_smallint ->
        withMalloc
          (\intPtr -> do
-            mlen <- getTypedData stmt sql_c_short i (coerce intPtr) (SQLLEN 2)
+            mlen <- getTypedData dbc stmt sql_c_short i (coerce intPtr) (SQLLEN 2)
             case mlen of
               Nothing -> pure Nothing
               Just {} ->
@@ -548,15 +562,16 @@ getData stmt i col =
     colType = columnType col
 
 -- | Get the column's data as a vector of bytes.
-getBytesData :: SQLHSTMT s -> SQLUSMALLINT -> IO (Maybe Value)
-getBytesData stmt column = do
-  mavailableBytes <- getSize stmt sql_c_char column
+getBytesData :: Ptr EnvAndDbc -> SQLHSTMT s -> SQLUSMALLINT -> IO (Maybe Value)
+getBytesData dbc stmt column = do
+  mavailableBytes <- getSize dbc stmt sql_c_char column
   case mavailableBytes of
     Just availableBytes -> do
       let allocBytes = availableBytes + 1
       bufferp <- callocBytes (fromIntegral allocBytes)
       void
         (getTypedData
+           dbc
            stmt
            sql_c_char
            column
@@ -567,9 +582,9 @@ getBytesData stmt column = do
     Nothing -> pure Nothing
 
 -- | Get the column's data as a text string.
-getTextData :: SQLHSTMT s -> SQLUSMALLINT -> IO (Maybe Value)
-getTextData stmt column = do
-  mavailableChars <- getSize stmt sql_c_wchar column
+getTextData :: Ptr EnvAndDbc -> SQLHSTMT s -> SQLUSMALLINT -> IO (Maybe Value)
+getTextData dbc stmt column = do
+  mavailableChars <- getSize dbc stmt sql_c_wchar column
   case mavailableChars of
     Nothing -> pure Nothing
     Just availableBytes -> do
@@ -579,6 +594,7 @@ getTextData stmt column = do
         (\bufferp -> do
            void
              (getTypedData
+                dbc
                 stmt
                 sql_c_wchar
                 column
@@ -590,39 +606,37 @@ getTextData stmt column = do
 
 -- | Get some data into the given pointer.
 getTypedData ::
-     SQLHSTMT s
+     Ptr EnvAndDbc
+  -> SQLHSTMT s
   -> SQLCTYPE
   -> SQLUSMALLINT
   -> SQLPOINTER
   -> SQLLEN
   -> IO (Maybe Int64)
-getTypedData stmt ty column bufferp bufferlen =
+getTypedData dbc stmt ty column bufferp bufferlen =
   withMalloc
     (\copiedPtr -> do
        assertSuccess
+         dbc
          "getTypedData"
-         (odbc_SQLGetData
-            stmt
-            column
-            ty
-            bufferp
-            bufferlen
-            copiedPtr)
+         (odbc_SQLGetData dbc stmt column ty bufferp bufferlen copiedPtr)
        copiedBytes <- peek copiedPtr
        if copiedBytes == sql_null_data
          then pure Nothing
          else pure (Just (coerce copiedBytes :: Int64)))
 
 -- | Get only the size of the data, no copying.
-getSize :: SQLHSTMT s -> SQLCTYPE -> SQLUSMALLINT -> IO (Maybe Int64)
-getSize stmt ty column =
+getSize :: Ptr EnvAndDbc -> SQLHSTMT s -> SQLCTYPE -> SQLUSMALLINT -> IO (Maybe Int64)
+getSize dbc stmt ty column =
   withMalloc
     (\availablePtr -> do
        withMalloc
          (\bufferp ->
             assertSuccess
+              dbc
               "getSize"
               (odbc_SQLGetData
+                 dbc
                  stmt
                  column
                  ty
@@ -651,12 +665,15 @@ assertNotNull label m = do
     else pure val
 
 -- | Check that the RETCODE is successful.
-assertSuccess :: String -> IO RETCODE -> IO ()
-assertSuccess label m = do
+assertSuccess :: Ptr EnvAndDbc -> String -> IO RETCODE -> IO ()
+assertSuccess dbc label m = do
   retcode <- m
   if retcode == sql_success || retcode == sql_success_with_info
     then pure ()
-    else throwIO (UnsuccessfulReturnCode label (coerce retcode))
+    else do
+      ptr <- odbc_error dbc
+      string <- peekCString ptr
+      throwIO (UnsuccessfulReturnCode label (coerce retcode) string)
 
 --------------------------------------------------------------------------------
 -- Foreign types
@@ -710,6 +727,9 @@ newtype SQLWCHAR = SQLWCHAR CWString deriving (Show, Eq, Storable)
 --------------------------------------------------------------------------------
 -- Foreign functions
 
+foreign import ccall "odbc odbc_error"
+  odbc_error :: Ptr EnvAndDbc -> IO (Ptr CChar)
+
 foreign import ccall "odbc odbc_AllocEnvAndDbc"
   odbc_AllocEnvAndDbc :: IO (Ptr EnvAndDbc)
 
@@ -729,20 +749,21 @@ foreign import ccall "odbc odbc_SQLFreeStmt"
   odbc_SQLFreeStmt :: SQLHSTMT s -> IO ()
 
 foreign import ccall "odbc odbc_SQLExecDirectW"
-  odbc_SQLExecDirectW :: SQLHSTMT s -> SQLWCHAR -> SQLINTEGER -> IO RETCODE
+  odbc_SQLExecDirectW :: Ptr EnvAndDbc -> SQLHSTMT s -> SQLWCHAR -> SQLINTEGER -> IO RETCODE
 
 foreign import ccall "odbc odbc_SQLFetch"
-  odbc_SQLFetch :: SQLHSTMT s -> IO RETCODE
+  odbc_SQLFetch :: Ptr EnvAndDbc -> SQLHSTMT s -> IO RETCODE
 
 foreign import ccall "odbc odbc_SQLMoreResults"
-  odbc_SQLMoreResults :: SQLHSTMT s -> IO RETCODE
+  odbc_SQLMoreResults :: Ptr EnvAndDbc -> SQLHSTMT s -> IO RETCODE
 
 foreign import ccall "odbc odbc_SQLNumResultCols"
   odbc_SQLNumResultCols :: SQLHSTMT s -> Ptr SQLSMALLINT -> IO RETCODE
 
 foreign import ccall "odbc odbc_SQLGetData"
  odbc_SQLGetData
-  :: SQLHSTMT s
+  :: Ptr EnvAndDbc
+  -> SQLHSTMT s
   -> SQLUSMALLINT
   -> SQLCTYPE
   -> SQLPOINTER
