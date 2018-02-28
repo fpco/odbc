@@ -9,7 +9,7 @@
 
 module Main where
 
-import           Control.Exception (throwIO, SomeException(SomeException), try, bracket, onException, catch)
+import           Control.Exception (try, bracket, onException, SomeException)
 import           Control.Monad
 import           Control.Monad.IO.Class
 import           Data.ByteString (ByteString)
@@ -197,6 +197,7 @@ quickCheckIt typ shower unpack =
                                case unpack x of
                                  Nothing -> Left "Couldn't unpack value."
                                  Just v -> pure v
+                             Right _ -> Left "Invalid number of values returned."
                              Left (_ :: SomeException) ->
                                Left "Couldn't get value from row in test suite."
                      when
