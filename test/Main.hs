@@ -7,7 +7,8 @@
 
 module Main where
 
-import           Control.Exception (try, bracket)
+import           Control.Exception (throwIO, SomeException(SomeException), try, bracket, onException, catch)
+import           Control.Monad
 import           Control.Monad.IO.Class
 import           Data.ByteString (ByteString)
 import qualified Data.ByteString.Char8 as S8
@@ -111,8 +112,10 @@ quickCheckIt typ cons shower =
                      rows <-
                        liftIO
                          (try
-                            (do exec c q
-                                query c "SELECT * FROM test"))
+                            (do onException (exec c q) (putStrLn "Exec failed.")
+                                onException
+                                  (query c "SELECT * FROM test")
+                                  (putStrLn "Query failed!")))
                      let expected :: Either ODBCException [[Maybe Value]]
                          expected = Right [[Just (cons input)]]
                      monitor
@@ -120,6 +123,11 @@ quickCheckIt typ cons shower =
                           (show rows ++
                            " should be " ++
                            show expected ++ "\n\nfor query: " <> T.unpack q))
+                     when
+                       (rows /= expected)
+                       (liftIO
+                          (putStrLn
+                             ("Assertion failed: " ++ show (rows, expected))))
                      assert (rows == expected)))))
 
 --------------------------------------------------------------------------------
