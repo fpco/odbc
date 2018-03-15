@@ -12,7 +12,10 @@ library
   hs-source-dirs:    src
   ghc-options:       -Wall -O2
   cc-options:        -Wall -Wconversion
-  exposed-modules:   Database.ODBC
+  exposed-modules:
+   Database.ODBC.Internal
+   Database.ODBC.SQLServer
+   Database.ODBC.Conversion
   default-language:  Haskell2010
   if os(mingw32) || os(win32)
     extra-libraries: odbc32
@@ -26,7 +29,9 @@ library
     async,
     bytestring,
     text,
-    unliftio-core
+    unliftio-core,
+    formatting,
+    containers
 
 executable odbc
   hs-source-dirs:    app

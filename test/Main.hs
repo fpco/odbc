@@ -1,5 +1,6 @@
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE ViewPatterns #-}
 {-# OPTIONS_GHC -fno-warn-orphans #-}
@@ -171,7 +172,7 @@ quickCheckIt typ shower unpack =
     (bracket
        (do c <- connectWithString
            exec c "DROP TABLE IF EXISTS test"
-           exec c ("CREATE TABLE test (f " <> typ <> ")")
+           exec c ("CREATE TABLE test (f " <> fromString typ <> ")")
            pure c)
        close)
     (it

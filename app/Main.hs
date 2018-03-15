@@ -7,7 +7,7 @@ import           Control.Exception
 import           Data.List
 import qualified Data.Text as T
 import qualified Data.Text.IO as T
-import qualified Database.ODBC as ODBC
+import qualified Database.ODBC.Internal as ODBC
 import           System.Environment
 import           System.IO
 import           Text.Printf
@@ -51,7 +51,7 @@ repl c = do
         showColumn =
           \case
             ODBC.TextValue t -> show t
-            ODBC.BytesValue bs -> show bs
+            ODBC.ByteStringValue bs -> show bs
             ODBC.BoolValue b -> show b
             ODBC.DoubleValue d -> printf "%f" d
             ODBC.IntValue i -> show i

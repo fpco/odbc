@@ -1,5 +1,6 @@
+{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE TupleSections #-}
-{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE BangPatterns #-}
@@ -11,15 +12,16 @@
 {-# LANGUAGE ForeignFunctionInterface #-}
 
 -- | ODBC database API.
+--
+-- WARNING: This API is meant as a base for more high-level APIs, such
+-- as the one provided in "Database.ODBC.SQLServer". The commands here
+-- are all vulerable to SQL injection attacks. See
+-- <https://en.wikipedia.org/wiki/SQL_injection> for more information.
+--
+-- Don't use this module if you don't know what you're doing.
 
-module Database.ODBC
-  ( -- * Building
-    -- $building
-
-    -- * Basic library usage
-    -- $usage
-
-    -- * Connect/disconnect
+module Database.ODBC.Internal
+  ( -- * Connect/disconnect
     connect
   , close
   , Connection
@@ -47,121 +49,19 @@ import           Control.DeepSeq
 import           Control.Exception
 import           Control.Monad
 import           Control.Monad.IO.Class
-import Control.Monad.IO.Unlift
+import           Control.Monad.IO.Unlift
 import           Data.ByteString (ByteString)
 import qualified Data.ByteString.Unsafe as S
 import           Data.Coerce
 import           Data.Data
 import           Data.Int
+import           Data.String
 import           Data.Text (Text)
 import qualified Data.Text as T
 import qualified Data.Text.Foreign as T
 import           Foreign hiding (void)
 import           Foreign.C
 import           GHC.Generics
-
--- $building
---
--- You have to compile your projects using the @-threaded@ flag to
--- GHC. In your .cabal file, this would look like:
---
--- @
--- ghc-options: -threaded
--- @
-
--- $usage
---
--- An example program using this library:
---
--- @
--- {-\# LANGUAGE OverloadedStrings \#-}
--- import Database.ODBC
--- main :: IO ()
--- main = do
---   conn <-
---     connect
---       "DRIVER={ODBC Driver 13 for SQL Server};SERVER=192.168.99.100;Uid=SA;Pwd=Passw0rd"
---   exec conn "DROP TABLE IF EXISTS example"
---   exec conn "CREATE TABLE example (id int, name ntext, likes_tacos bit)"
---   exec conn "INSERT INTO example VALUES (1, \'Chris\', 0), (2, \'Mary\', 1)"
---   rows <- query conn "SELECT * FROM example"
---   print rows
---   close conn
--- @
---
--- You need the @OverloadedStrings@ extension so that you can write
--- 'Text' values for the queries and executions.
---
--- The output of this program is to print a list of rows of 'Value':
---
--- @
--- [[Just (IntValue 1),Just (TextValue \"Chris\"),Just (BoolValue False)],[Just (IntValue 2),Just (TextValue \"Mary\"),Just (BoolValue True)]]
--- @
-
--- $exceptions
---
--- Proper connection handling should guarantee that a close happens at
--- the right time. Here is a better way to write it:
---
--- @
--- {-\# LANGUAGE OverloadedStrings \#-}
--- import Control.Exception
--- import Database.ODBC
--- main :: IO ()
--- main =
---   bracket
---     (connect
---        "DRIVER={ODBC Driver 13 for SQL Server};SERVER=192.168.99.100;Uid=SA;Pwd=Passw0rd")
---     close
---     (\\conn -> do
---        rows <- query conn "SELECT N'Hello, World!'"
---        print rows)
--- @
---
--- If an exception occurs inside the lambda, 'bracket' ensures that
--- 'close' is called.
-
--- $streaming
---
--- Loading all rows of a query result can be expensive and use a lot
--- of memory. Another way to load data is by fetching one row at a
--- time, called streaming.
---
--- Here's an example of finding the longest string from a set of
--- rows. It outputs @"Hello!"@. We only work on 'TextValue', we ignore
--- for example the @NULL@ row.
---
--- @
--- {-\# LANGUAGE OverloadedStrings, LambdaCase \#-}
--- import qualified Data.Text as T
--- import           Control.Exception
--- import           Database.ODBC
--- main :: IO ()
--- main =
---   bracket
---     (connect
---        \"DRIVER={ODBC Driver 13 for SQL Server};SERVER=192.168.99.100;Uid=SA;Pwd=Passw0rd\")
---     close
---     (\\conn -> do
---        exec conn \"DROP TABLE IF EXISTS example\"
---        exec conn \"CREATE TABLE example (name ntext)\"
---        exec conn \"INSERT INTO example VALUES (\'foo\'),(\'bar\'),(NULL),(\'mu\'),(\'Hello!\')\"
---        longest <-
---          stream
---            conn
---            \"SELECT * FROM example\"
---            (\\longest ->
---               \\case
---                 [Just (TextValue text)] ->
---                   pure
---                     (Continue
---                        (if T.length text > T.length longest
---                           then text
---                           else longest))
---                 _ -> pure (Continue longest))
---            \"\"
---        print longest)
--- @
 
 --------------------------------------------------------------------------------
 -- Public types
@@ -191,6 +91,9 @@ data ODBCException
     -- ^ You attempted to 'close' the database twice.
   | NoTotalInformation !Int
     -- ^ No total length information for column.
+  | DataRetrievalError !String
+    -- ^ There was a general error retrieving data. String will
+    -- contain the reason why.
   deriving (Typeable, Show, Eq)
 instance Exception ODBCException
 
@@ -198,12 +101,12 @@ instance Exception ODBCException
 data Value
   = TextValue !Text
     -- ^ A Unicode text value.
-  | BytesValue !ByteString
-    -- ^ A vector of bytes. It might be a string, but we don't know
-    -- the encoding. Use 'Data.Text.Encoding.decodeUtf8' if the string
-    -- is UTF-8 encoded, or 'Data.Text.Encoding.decodeUtf16LE' if it
-    -- is UTF-16 encoded. For other encodings, see the Haskell
-    -- text-icu package.
+  | ByteStringValue !ByteString
+    -- ^ A vector of bytes. It might be binary, or a string, but we
+    -- don't know the encoding. Use 'Data.Text.Encoding.decodeUtf8' if
+    -- the string is UTF-8 encoded, or
+    -- 'Data.Text.Encoding.decodeUtf16LE' if it is UTF-16 encoded. For
+    -- other encodings, see the Haskell text-icu package.
   | BoolValue !Bool
     -- ^ A simple boolean.
   | DoubleValue !Double
@@ -293,7 +196,10 @@ exec ::
   -> m ()
 exec conn string =
   withBound
-    (withHDBC conn "exec" (\dbc -> withExecDirect dbc string (const (pure ()))))
+    (withHDBC
+       conn
+       "exec"
+       (\dbc -> withExecDirect dbc string (const (pure ()))))
 
 -- | Query and return a list of rows.
 query ::
@@ -324,13 +230,17 @@ stream ::
   -- evaluated each iteration.
   -> m state
   -- ^ Final result, produced by the stepper function.
-stream conn string step state =
-  do unlift <- askUnliftIO
-     withBound
-       (withHDBC
-          conn
-          "stream"
-          (\dbc -> withExecDirect dbc string (fetchIterator dbc unlift step state)))
+stream conn string step state = do
+  unlift <- askUnliftIO
+  withBound
+    (withHDBC
+       conn
+       "stream"
+       (\dbc ->
+          withExecDirect
+            dbc
+            string
+            (fetchIterator dbc unlift step state)))
 
 --------------------------------------------------------------------------------
 -- Internal wrapper functions
@@ -460,7 +370,7 @@ fetchStatementRows dbc stmt = do
 describeColumn :: Ptr EnvAndDbc -> SQLHSTMT s -> Int16 -> IO Column
 describeColumn dbPtr stmt i =
   T.useAsPtr
-    (T.replicate 1000 "0")
+    (T.replicate 1000 (fromString "0"))
     (\namep namelen ->
        (withMalloc
           (\namelenp ->
@@ -578,7 +488,7 @@ getBytesData dbc stmt column = do
            (coerce bufferp)
            (SQLLEN (fromIntegral allocBytes)))
       bs <- S.unsafePackMallocCStringLen (bufferp, fromIntegral availableBytes)
-      evaluate (Just (BytesValue bs))
+      evaluate (Just (ByteStringValue bs))
     Nothing -> pure Nothing
 
 -- | Get the column's data as a text string.

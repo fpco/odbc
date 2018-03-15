@@ -1,0 +1,236 @@
+{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE TupleSections #-}
+
+-- | Conversion conveniences.
+
+module Database.ODBC.Conversion
+  ( FromValue(..)
+  , FromRow(..)
+  ) where
+
+import           Data.ByteString (ByteString)
+import qualified Data.ByteString.Lazy as L
+import           Data.Text (Text)
+import qualified Data.Text.Lazy as LT
+import           Database.ODBC.Internal
+
+--------------------------------------------------------------------------------
+-- Conversion from SQL
+
+-- | Convert from a 'Value' to a regular Haskell value.
+class FromValue a where
+  fromValue :: Maybe Value -> Either String a
+  -- ^ The 'String' is used for a helpful error message.
+
+-- | Expect a value to be non-null.
+withNonNull ::
+     FromValue a => (Value -> Either String a) -> Maybe Value -> Either String a
+withNonNull f =
+  \case
+    Nothing -> Left "Unexpected NULL for value"
+    Just v -> f v
+
+instance FromValue a => FromValue (Maybe a) where
+  fromValue =
+    \case
+      Nothing -> pure Nothing
+      Just v -> fmap Just (fromValue (Just v))
+
+instance FromValue Value where
+  fromValue = withNonNull pure
+
+instance FromValue Text where
+  fromValue =
+    withNonNull
+      (\case
+         TextValue x -> pure (id x)
+         v -> Left ("Expected Text, but got: " ++ show v))
+
+instance FromValue LT.Text where
+  fromValue =
+    withNonNull
+      (\case
+         TextValue x -> pure (LT.fromStrict x)
+         v -> Left ("Expected Text, but got: " ++ show v))
+
+instance FromValue ByteString where
+  fromValue =
+    withNonNull
+      (\case
+         ByteStringValue x -> pure (id x)
+         v -> Left ("Expected ByteString, but got: " ++ show v))
+
+instance FromValue L.ByteString where
+  fromValue =
+    withNonNull
+      (\case
+         ByteStringValue x -> pure (L.fromStrict x)
+         v -> Left ("Expected ByteString, but got: " ++ show v))
+
+instance FromValue Int where
+  fromValue =
+    withNonNull
+      (\case
+         IntValue x -> pure (id x)
+         v -> Left ("Expected Int, but got: " ++ show v))
+
+instance FromValue Double where
+  fromValue =
+    withNonNull
+      (\case
+         DoubleValue x -> pure (id x)
+         v -> Left ("Expected Double, but got: " ++ show v))
+
+instance FromValue Bool where
+  fromValue =
+    withNonNull
+      (\case
+         BoolValue x -> pure (id x)
+         v -> Left ("Expected Bool, but got: " ++ show v))
+
+--------------------------------------------------------------------------------
+-- Producing rows
+
+-- | For producing rows from a list of column values.
+--
+-- You can get a row of a single type like 'Text' or a list
+-- e.g. @[Maybe Value]@ if you don't know what you're dealing with, or
+-- a tuple e.g. @(Text, Int, Bool)@.
+class FromRow r where
+  fromRow :: [Maybe Value] -> Either String r
+
+instance FromValue v => FromRow (Maybe v) where
+  fromRow [v] = fromValue v
+  fromRow _ = Left "Unexpected number of fields in row"
+
+instance FromRow [Maybe Value] where
+  fromRow = pure
+
+instance FromRow Value where
+  fromRow [v] = fromValue v
+  fromRow _ = Left "Unexpected number of fields in row"
+
+instance FromRow Text where
+  fromRow [v] = fromValue v
+  fromRow _ = Left "Unexpected number of fields in row"
+
+instance FromRow LT.Text where
+  fromRow [v] = fromValue v
+  fromRow _ = Left "Unexpected number of fields in row"
+
+instance FromRow ByteString where
+  fromRow [v] = fromValue v
+  fromRow _ = Left "Unexpected number of fields in row"
+
+instance FromRow L.ByteString where
+  fromRow [v] = fromValue v
+  fromRow _ = Left "Unexpected number of fields in row"
+
+instance FromRow Int where
+  fromRow [v] = fromValue v
+  fromRow _ = Left "Unexpected number of fields in row"
+
+instance FromRow Double where
+  fromRow [v] = fromValue v
+  fromRow _ = Left "Unexpected number of fields in row"
+
+instance FromRow Bool where
+  fromRow [v] = fromValue v
+  fromRow _ = Left "Unexpected number of fields in row"
+
+instance (FromValue a,FromValue b) => FromRow (a,b) where
+  fromRow [a,b] = (,) <$> fromValue a <*> fromValue b
+  fromRow r = Left ("Unexpected number of fields in row: " ++ show (length r))
+
+instance (FromValue a,FromValue b,FromValue c) => FromRow (a,b,c) where
+  fromRow [a,b,c] = (,,) <$> fromValue a <*> fromValue b <*> fromValue c
+  fromRow r = Left ("Unexpected number of fields in row: " ++ show (length r))
+
+instance (FromValue a,FromValue b,FromValue c,FromValue d) => FromRow (a,b,c,d) where
+  fromRow [a,b,c,d] = (,,,) <$> fromValue a <*> fromValue b <*> fromValue c <*> fromValue d
+  fromRow r = Left ("Unexpected number of fields in row: " ++ show (length r))
+
+instance (FromValue a,FromValue b,FromValue c,FromValue d,FromValue e) => FromRow (a,b,c,d,e) where
+  fromRow [a,b,c,d,e] = (,,,,) <$> fromValue a <*> fromValue b <*> fromValue c <*> fromValue d <*> fromValue e
+  fromRow r = Left ("Unexpected number of fields in row: " ++ show (length r))
+
+instance (FromValue a,FromValue b,FromValue c,FromValue d,FromValue e,FromValue f) => FromRow (a,b,c,d,e,f) where
+  fromRow [a,b,c,d,e,f] = (,,,,,) <$> fromValue a <*> fromValue b <*> fromValue c <*> fromValue d <*> fromValue e <*> fromValue f
+  fromRow r = Left ("Unexpected number of fields in row: " ++ show (length r))
+
+instance (FromValue a,FromValue b,FromValue c,FromValue d,FromValue e,FromValue f,FromValue g) => FromRow (a,b,c,d,e,f,g) where
+  fromRow [a,b,c,d,e,f,g] = (,,,,,,) <$> fromValue a <*> fromValue b <*> fromValue c <*> fromValue d <*> fromValue e <*> fromValue f <*> fromValue g
+  fromRow r = Left ("Unexpected number of fields in row: " ++ show (length r))
+
+instance (FromValue a,FromValue b,FromValue c,FromValue d,FromValue e,FromValue f,FromValue g,FromValue h) => FromRow (a,b,c,d,e,f,g,h) where
+  fromRow [a,b,c,d,e,f,g,h] = (,,,,,,,) <$> fromValue a <*> fromValue b <*> fromValue c <*> fromValue d <*> fromValue e <*> fromValue f <*> fromValue g <*> fromValue h
+  fromRow r = Left ("Unexpected number of fields in row: " ++ show (length r))
+
+instance (FromValue a,FromValue b,FromValue c,FromValue d,FromValue e,FromValue f,FromValue g,FromValue h,FromValue i) => FromRow (a,b,c,d,e,f,g,h,i) where
+  fromRow [a,b,c,d,e,f,g,h,i] = (,,,,,,,,) <$> fromValue a <*> fromValue b <*> fromValue c <*> fromValue d <*> fromValue e <*> fromValue f <*> fromValue g <*> fromValue h <*> fromValue i
+  fromRow r = Left ("Unexpected number of fields in row: " ++ show (length r))
+
+instance (FromValue a,FromValue b,FromValue c,FromValue d,FromValue e,FromValue f,FromValue g,FromValue h,FromValue i,FromValue j) => FromRow (a,b,c,d,e,f,g,h,i,j) where
+  fromRow [a,b,c,d,e,f,g,h,i,j] = (,,,,,,,,,) <$> fromValue a <*> fromValue b <*> fromValue c <*> fromValue d <*> fromValue e <*> fromValue f <*> fromValue g <*> fromValue h <*> fromValue i <*> fromValue j
+  fromRow r = Left ("Unexpected number of fields in row: " ++ show (length r))
+
+instance (FromValue a,FromValue b,FromValue c,FromValue d,FromValue e,FromValue f,FromValue g,FromValue h,FromValue i,FromValue j,FromValue k) => FromRow (a,b,c,d,e,f,g,h,i,j,k) where
+  fromRow [a,b,c,d,e,f,g,h,i,j,k] = (,,,,,,,,,,) <$> fromValue a <*> fromValue b <*> fromValue c <*> fromValue d <*> fromValue e <*> fromValue f <*> fromValue g <*> fromValue h <*> fromValue i <*> fromValue j <*> fromValue k
+  fromRow r = Left ("Unexpected number of fields in row: " ++ show (length r))
+
+instance (FromValue a,FromValue b,FromValue c,FromValue d,FromValue e,FromValue f,FromValue g,FromValue h,FromValue i,FromValue j,FromValue k,FromValue l) => FromRow (a,b,c,d,e,f,g,h,i,j,k,l) where
+  fromRow [a,b,c,d,e,f,g,h,i,j,k,l] = (,,,,,,,,,,,) <$> fromValue a <*> fromValue b <*> fromValue c <*> fromValue d <*> fromValue e <*> fromValue f <*> fromValue g <*> fromValue h <*> fromValue i <*> fromValue j <*> fromValue k <*> fromValue l
+  fromRow r = Left ("Unexpected number of fields in row: " ++ show (length r))
+
+instance (FromValue a,FromValue b,FromValue c,FromValue d,FromValue e,FromValue f,FromValue g,FromValue h,FromValue i,FromValue j,FromValue k,FromValue l,FromValue m) => FromRow (a,b,c,d,e,f,g,h,i,j,k,l,m) where
+  fromRow [a,b,c,d,e,f,g,h,i,j,k,l,m] = (,,,,,,,,,,,,) <$> fromValue a <*> fromValue b <*> fromValue c <*> fromValue d <*> fromValue e <*> fromValue f <*> fromValue g <*> fromValue h <*> fromValue i <*> fromValue j <*> fromValue k <*> fromValue l <*> fromValue m
+  fromRow r = Left ("Unexpected number of fields in row: " ++ show (length r))
+
+instance (FromValue a,FromValue b,FromValue c,FromValue d,FromValue e,FromValue f,FromValue g,FromValue h,FromValue i,FromValue j,FromValue k,FromValue l,FromValue m,FromValue n) => FromRow (a,b,c,d,e,f,g,h,i,j,k,l,m,n) where
+  fromRow [a,b,c,d,e,f,g,h,i,j,k,l,m,n] = (,,,,,,,,,,,,,) <$> fromValue a <*> fromValue b <*> fromValue c <*> fromValue d <*> fromValue e <*> fromValue f <*> fromValue g <*> fromValue h <*> fromValue i <*> fromValue j <*> fromValue k <*> fromValue l <*> fromValue m <*> fromValue n
+  fromRow r = Left ("Unexpected number of fields in row: " ++ show (length r))
+
+instance (FromValue a,FromValue b,FromValue c,FromValue d,FromValue e,FromValue f,FromValue g,FromValue h,FromValue i,FromValue j,FromValue k,FromValue l,FromValue m,FromValue n,FromValue o) => FromRow (a,b,c,d,e,f,g,h,i,j,k,l,m,n,o) where
+  fromRow [a,b,c,d,e,f,g,h,i,j,k,l,m,n,o] = (,,,,,,,,,,,,,,) <$> fromValue a <*> fromValue b <*> fromValue c <*> fromValue d <*> fromValue e <*> fromValue f <*> fromValue g <*> fromValue h <*> fromValue i <*> fromValue j <*> fromValue k <*> fromValue l <*> fromValue m <*> fromValue n <*> fromValue o
+  fromRow r = Left ("Unexpected number of fields in row: " ++ show (length r))
+
+instance (FromValue a,FromValue b,FromValue c,FromValue d,FromValue e,FromValue f,FromValue g,FromValue h,FromValue i,FromValue j,FromValue k,FromValue l,FromValue m,FromValue n,FromValue o,FromValue p) => FromRow (a,b,c,d,e,f,g,h,i,j,k,l,m,n,o,p) where
+  fromRow [a,b,c,d,e,f,g,h,i,j,k,l,m,n,o,p] = (,,,,,,,,,,,,,,,) <$> fromValue a <*> fromValue b <*> fromValue c <*> fromValue d <*> fromValue e <*> fromValue f <*> fromValue g <*> fromValue h <*> fromValue i <*> fromValue j <*> fromValue k <*> fromValue l <*> fromValue m <*> fromValue n <*> fromValue o <*> fromValue p
+  fromRow r = Left ("Unexpected number of fields in row: " ++ show (length r))
+
+instance (FromValue a,FromValue b,FromValue c,FromValue d,FromValue e,FromValue f,FromValue g,FromValue h,FromValue i,FromValue j,FromValue k,FromValue l,FromValue m,FromValue n,FromValue o,FromValue p,FromValue q) => FromRow (a,b,c,d,e,f,g,h,i,j,k,l,m,n,o,p,q) where
+  fromRow [a,b,c,d,e,f,g,h,i,j,k,l,m,n,o,p,q] = (,,,,,,,,,,,,,,,,) <$> fromValue a <*> fromValue b <*> fromValue c <*> fromValue d <*> fromValue e <*> fromValue f <*> fromValue g <*> fromValue h <*> fromValue i <*> fromValue j <*> fromValue k <*> fromValue l <*> fromValue m <*> fromValue n <*> fromValue o <*> fromValue p <*> fromValue q
+  fromRow r = Left ("Unexpected number of fields in row: " ++ show (length r))
+
+instance (FromValue a,FromValue b,FromValue c,FromValue d,FromValue e,FromValue f,FromValue g,FromValue h,FromValue i,FromValue j,FromValue k,FromValue l,FromValue m,FromValue n,FromValue o,FromValue p,FromValue q,FromValue r) => FromRow (a,b,c,d,e,f,g,h,i,j,k,l,m,n,o,p,q,r) where
+  fromRow [a,b,c,d,e,f,g,h,i,j,k,l,m,n,o,p,q,r] = (,,,,,,,,,,,,,,,,,) <$> fromValue a <*> fromValue b <*> fromValue c <*> fromValue d <*> fromValue e <*> fromValue f <*> fromValue g <*> fromValue h <*> fromValue i <*> fromValue j <*> fromValue k <*> fromValue l <*> fromValue m <*> fromValue n <*> fromValue o <*> fromValue p <*> fromValue q <*> fromValue r
+  fromRow r = Left ("Unexpected number of fields in row: " ++ show (length r))
+
+instance (FromValue a,FromValue b,FromValue c,FromValue d,FromValue e,FromValue f,FromValue g,FromValue h,FromValue i,FromValue j,FromValue k,FromValue l,FromValue m,FromValue n,FromValue o,FromValue p,FromValue q,FromValue r,FromValue s) => FromRow (a,b,c,d,e,f,g,h,i,j,k,l,m,n,o,p,q,r,s) where
+  fromRow [a,b,c,d,e,f,g,h,i,j,k,l,m,n,o,p,q,r,s] = (,,,,,,,,,,,,,,,,,,) <$> fromValue a <*> fromValue b <*> fromValue c <*> fromValue d <*> fromValue e <*> fromValue f <*> fromValue g <*> fromValue h <*> fromValue i <*> fromValue j <*> fromValue k <*> fromValue l <*> fromValue m <*> fromValue n <*> fromValue o <*> fromValue p <*> fromValue q <*> fromValue r <*> fromValue s
+  fromRow r = Left ("Unexpected number of fields in row: " ++ show (length r))
+
+instance (FromValue a,FromValue b,FromValue c,FromValue d,FromValue e,FromValue f,FromValue g,FromValue h,FromValue i,FromValue j,FromValue k,FromValue l,FromValue m,FromValue n,FromValue o,FromValue p,FromValue q,FromValue r,FromValue s,FromValue t) => FromRow (a,b,c,d,e,f,g,h,i,j,k,l,m,n,o,p,q,r,s,t) where
+  fromRow [a,b,c,d,e,f,g,h,i,j,k,l,m,n,o,p,q,r,s,t] = (,,,,,,,,,,,,,,,,,,,) <$> fromValue a <*> fromValue b <*> fromValue c <*> fromValue d <*> fromValue e <*> fromValue f <*> fromValue g <*> fromValue h <*> fromValue i <*> fromValue j <*> fromValue k <*> fromValue l <*> fromValue m <*> fromValue n <*> fromValue o <*> fromValue p <*> fromValue q <*> fromValue r <*> fromValue s <*> fromValue t
+  fromRow r = Left ("Unexpected number of fields in row: " ++ show (length r))
+
+instance (FromValue a,FromValue b,FromValue c,FromValue d,FromValue e,FromValue f,FromValue g,FromValue h,FromValue i,FromValue j,FromValue k,FromValue l,FromValue m,FromValue n,FromValue o,FromValue p,FromValue q,FromValue r,FromValue s,FromValue t,FromValue u) => FromRow (a,b,c,d,e,f,g,h,i,j,k,l,m,n,o,p,q,r,s,t,u) where
+  fromRow [a,b,c,d,e,f,g,h,i,j,k,l,m,n,o,p,q,r,s,t,u] = (,,,,,,,,,,,,,,,,,,,,) <$> fromValue a <*> fromValue b <*> fromValue c <*> fromValue d <*> fromValue e <*> fromValue f <*> fromValue g <*> fromValue h <*> fromValue i <*> fromValue j <*> fromValue k <*> fromValue l <*> fromValue m <*> fromValue n <*> fromValue o <*> fromValue p <*> fromValue q <*> fromValue r <*> fromValue s <*> fromValue t <*> fromValue u
+  fromRow r = Left ("Unexpected number of fields in row: " ++ show (length r))
+
+instance (FromValue a,FromValue b,FromValue c,FromValue d,FromValue e,FromValue f,FromValue g,FromValue h,FromValue i,FromValue j,FromValue k,FromValue l,FromValue m,FromValue n,FromValue o,FromValue p,FromValue q,FromValue r,FromValue s,FromValue t,FromValue u,FromValue v) => FromRow (a,b,c,d,e,f,g,h,i,j,k,l,m,n,o,p,q,r,s,t,u,v) where
+  fromRow [a,b,c,d,e,f,g,h,i,j,k,l,m,n,o,p,q,r,s,t,u,v] = (,,,,,,,,,,,,,,,,,,,,,) <$> fromValue a <*> fromValue b <*> fromValue c <*> fromValue d <*> fromValue e <*> fromValue f <*> fromValue g <*> fromValue h <*> fromValue i <*> fromValue j <*> fromValue k <*> fromValue l <*> fromValue m <*> fromValue n <*> fromValue o <*> fromValue p <*> fromValue q <*> fromValue r <*> fromValue s <*> fromValue t <*> fromValue u <*> fromValue v
+  fromRow r = Left ("Unexpected number of fields in row: " ++ show (length r))
+
+instance (FromValue a,FromValue b,FromValue c,FromValue d,FromValue e,FromValue f,FromValue g,FromValue h,FromValue i,FromValue j,FromValue k,FromValue l,FromValue m,FromValue n,FromValue o,FromValue p,FromValue q,FromValue r,FromValue s,FromValue t,FromValue u,FromValue v,FromValue w) => FromRow (a,b,c,d,e,f,g,h,i,j,k,l,m,n,o,p,q,r,s,t,u,v,w) where
+  fromRow [a,b,c,d,e,f,g,h,i,j,k,l,m,n,o,p,q,r,s,t,u,v,w] = (,,,,,,,,,,,,,,,,,,,,,,) <$> fromValue a <*> fromValue b <*> fromValue c <*> fromValue d <*> fromValue e <*> fromValue f <*> fromValue g <*> fromValue h <*> fromValue i <*> fromValue j <*> fromValue k <*> fromValue l <*> fromValue m <*> fromValue n <*> fromValue o <*> fromValue p <*> fromValue q <*> fromValue r <*> fromValue s <*> fromValue t <*> fromValue u <*> fromValue v <*> fromValue w
+  fromRow r = Left ("Unexpected number of fields in row: " ++ show (length r))
+
+instance (FromValue a,FromValue b,FromValue c,FromValue d,FromValue e,FromValue f,FromValue g,FromValue h,FromValue i,FromValue j,FromValue k,FromValue l,FromValue m,FromValue n,FromValue o,FromValue p,FromValue q,FromValue r,FromValue s,FromValue t,FromValue u,FromValue v,FromValue w,FromValue x) => FromRow (a,b,c,d,e,f,g,h,i,j,k,l,m,n,o,p,q,r,s,t,u,v,w,x) where
+  fromRow [a,b,c,d,e,f,g,h,i,j,k,l,m,n,o,p,q,r,s,t,u,v,w,x] = (,,,,,,,,,,,,,,,,,,,,,,,) <$> fromValue a <*> fromValue b <*> fromValue c <*> fromValue d <*> fromValue e <*> fromValue f <*> fromValue g <*> fromValue h <*> fromValue i <*> fromValue j <*> fromValue k <*> fromValue l <*> fromValue m <*> fromValue n <*> fromValue o <*> fromValue p <*> fromValue q <*> fromValue r <*> fromValue s <*> fromValue t <*> fromValue u <*> fromValue v <*> fromValue w <*> fromValue x
+  fromRow r = Left ("Unexpected number of fields in row: " ++ show (length r))
+
+instance (FromValue a,FromValue b,FromValue c,FromValue d,FromValue e,FromValue f,FromValue g,FromValue h,FromValue i,FromValue j,FromValue k,FromValue l,FromValue m,FromValue n,FromValue o,FromValue p,FromValue q,FromValue r,FromValue s,FromValue t,FromValue u,FromValue v,FromValue w,FromValue x,FromValue y) => FromRow (a,b,c,d,e,f,g,h,i,j,k,l,m,n,o,p,q,r,s,t,u,v,w,x,y) where
+  fromRow [a,b,c,d,e,f,g,h,i,j,k,l,m,n,o,p,q,r,s,t,u,v,w,x,y] = (,,,,,,,,,,,,,,,,,,,,,,,,) <$> fromValue a <*> fromValue b <*> fromValue c <*> fromValue d <*> fromValue e <*> fromValue f <*> fromValue g <*> fromValue h <*> fromValue i <*> fromValue j <*> fromValue k <*> fromValue l <*> fromValue m <*> fromValue n <*> fromValue o <*> fromValue p <*> fromValue q <*> fromValue r <*> fromValue s <*> fromValue t <*> fromValue u <*> fromValue v <*> fromValue w <*> fromValue x <*> fromValue y
+  fromRow r = Left ("Unexpected number of fields in row: " ++ show (length r))
