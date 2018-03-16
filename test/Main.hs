@@ -19,7 +19,7 @@ import           Data.Char
 import           Data.Monoid
 import           Data.Text (Text)
 import qualified Data.Text as T
-import           Database.ODBC
+import           Database.ODBC.Internal
 import           System.Environment
 import           Test.Hspec
 import           Test.QuickCheck
@@ -34,8 +34,10 @@ main = hspec spec
 
 spec :: Spec
 spec = do
-  describe "Connectivity" connectivity
-  describe "Data retrieval" dataRetrieval
+  describe
+    "Database.ODBC.Internal"
+    (do describe "Connectivity" connectivity
+        describe "Data retrieval" dataRetrieval)
 
 connectivity :: Spec
 connectivity = do
@@ -77,13 +79,13 @@ dataRetrieval = do
         shouldBe
           rows
           [ [ Just (IntValue 123)
-            , Just (BytesValue "abc")
+            , Just (ByteStringValue "abc")
             , Just (BoolValue True)
             , Just (TextValue "wib")
             , Just (DoubleValue 2.415)
             ]
           , [ Just (IntValue 456)
-            , Just (BytesValue "def")
+            , Just (ByteStringValue "def")
             , Just (BoolValue False)
             , Just (TextValue "wibble")
             , Just (DoubleValue 0.9999999999999)
@@ -135,7 +137,7 @@ dataRetrieval = do
     "text"
     showBytes
     (\case
-       BytesValue b -> pure b
+       ByteStringValue b -> pure b
        _ -> Nothing)
   quickCheckIt
     ("nvarchar(" <> T.pack (show maxStringLen) <> ")")
@@ -147,7 +149,7 @@ dataRetrieval = do
     ("varchar(" <> T.pack (show maxStringLen) <> ")")
     showBytes
     (\case
-       BytesValue b -> pure b
+       ByteStringValue b -> pure b
        _ -> Nothing)
   quickCheckIt
     "bit"
@@ -172,7 +174,7 @@ quickCheckIt typ shower unpack =
     (bracket
        (do c <- connectWithString
            exec c "DROP TABLE IF EXISTS test"
-           exec c ("CREATE TABLE test (f " <> fromString typ <> ")")
+           exec c ("CREATE TABLE test (f " <> typ <> ")")
            pure c)
        close)
     (it
