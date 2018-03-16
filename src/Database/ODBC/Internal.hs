@@ -425,7 +425,9 @@ getData dbc stmt i col =
      | colType == sql_double ->
        withMalloc
          (\doublePtr -> do
-            mlen <- getTypedData dbc stmt sql_c_double i (coerce doublePtr) (SQLLEN 8)
+            mlen <-
+              getTypedData dbc stmt sql_c_double i (coerce doublePtr) (SQLLEN 8)
+            -- float is 8 bytes: https://technet.microsoft.com/en-us/library/ms172424(v=sql.110).aspx
             case mlen of
               Nothing -> pure Nothing
               Just {} -> do
@@ -434,9 +436,10 @@ getData dbc stmt i col =
      | colType == sql_float ->
        withMalloc
          (\floatPtr -> do
-            mlen <- getTypedData dbc stmt sql_c_float i (coerce floatPtr) (SQLLEN 8)
-            -- Floats are covered by doubles too:
-            -- https://docs.microsoft.com/en-us/sql/odbc/reference/appendixes/c-data-types
+            mlen <-
+              getTypedData dbc stmt sql_c_double i (coerce floatPtr) (SQLLEN 8)
+            -- SQLFLOAT is covered by SQL_C_DOUBLE: https://docs.microsoft.com/en-us/sql/odbc/reference/appendixes/c-data-types
+            -- Float is 8 bytes: https://technet.microsoft.com/en-us/library/ms172424(v=sql.110).aspx
             case mlen of
               Nothing -> pure Nothing
               Just {} -> do
@@ -445,7 +448,8 @@ getData dbc stmt i col =
      | colType == sql_integer ->
        withMalloc
          (\intPtr -> do
-            mlen <- getTypedData dbc stmt sql_c_long i (coerce intPtr) (SQLLEN 4)
+            mlen <-
+              getTypedData dbc stmt sql_c_long i (coerce intPtr) (SQLLEN 4)
             case mlen of
               Nothing -> pure Nothing
               Just {} ->
@@ -455,7 +459,8 @@ getData dbc stmt i col =
      | colType == sql_smallint ->
        withMalloc
          (\intPtr -> do
-            mlen <- getTypedData dbc stmt sql_c_short i (coerce intPtr) (SQLLEN 2)
+            mlen <-
+              getTypedData dbc stmt sql_c_short i (coerce intPtr) (SQLLEN 2)
             case mlen of
               Nothing -> pure Nothing
               Just {} ->
