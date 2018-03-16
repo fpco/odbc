@@ -1,3 +1,4 @@
+{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE TupleSections #-}
@@ -11,6 +12,7 @@ module Database.ODBC.Conversion
 
 import           Data.ByteString (ByteString)
 import qualified Data.ByteString.Lazy as L
+import           Data.Functor.Identity
 import           Data.Text (Text)
 import qualified Data.Text.Lazy as LT
 import           Database.ODBC.Internal
@@ -82,6 +84,13 @@ instance FromValue Double where
          DoubleValue x -> pure (id x)
          v -> Left ("Expected Double, but got: " ++ show v))
 
+instance FromValue Float where
+  fromValue =
+    withNonNull
+      (\case
+         DoubleValue x -> pure (realToFrac x)
+         v -> Left ("Expected Float, but got: " ++ show v))
+
 instance FromValue Bool where
   fromValue =
     withNonNull
@@ -102,6 +111,10 @@ class FromRow r where
 
 instance FromValue v => FromRow (Maybe v) where
   fromRow [v] = fromValue v
+  fromRow _ = Left "Unexpected number of fields in row"
+
+instance FromValue v => FromRow (Identity v) where
+  fromRow [v] = fmap Identity (fromValue v)
   fromRow _ = Left "Unexpected number of fields in row"
 
 instance FromRow [Maybe Value] where
@@ -132,6 +145,10 @@ instance FromRow Int where
   fromRow _ = Left "Unexpected number of fields in row"
 
 instance FromRow Double where
+  fromRow [v] = fromValue v
+  fromRow _ = Left "Unexpected number of fields in row"
+
+instance FromRow Float where
   fromRow [v] = fromValue v
   fromRow _ = Left "Unexpected number of fields in row"
 

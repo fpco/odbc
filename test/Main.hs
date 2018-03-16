@@ -1,3 +1,5 @@
+{-# LANGUAGE TypeApplications #-}
+{-# LANGUAGE AllowAmbiguousTypes #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE OverloadedStrings #-}
@@ -16,10 +18,16 @@ import           Control.Monad.IO.Class
 import           Data.ByteString (ByteString)
 import qualified Data.ByteString.Char8 as S8
 import           Data.Char
+import           Data.Functor.Identity
 import           Data.Monoid
+import           Data.String
 import           Data.Text (Text)
 import qualified Data.Text as T
-import           Database.ODBC.Internal
+import           Database.ODBC.Conversion (FromValue(..))
+import           Database.ODBC.Internal (Value (..), Connection, ODBCException(..), Step(..))
+import qualified Database.ODBC.Internal as Internal
+import           Database.ODBC.SQLServer (ToSql(..))
+import qualified Database.ODBC.SQLServer as SQLServer
 import           System.Environment
 import           Test.Hspec
 import           Test.QuickCheck
@@ -38,6 +46,20 @@ spec = do
     "Database.ODBC.Internal"
     (do describe "Connectivity" connectivity
         describe "Data retrieval" dataRetrieval)
+  describe
+    "Database.ODBC.SQLServer"
+    (describe "Conversion to SQL" conversionTo)
+
+conversionTo :: Spec
+conversionTo = do
+  quickCheckFromValue @Float "float"
+  quickCheckFromValue @Double "float"
+  quickCheckFromValue @Int "integer"
+  quickCheckFromValue @Bool "bit"
+  quickCheckFromValue @Text "ntext"
+  quickCheckFromValue @Text ("nvarchar(" <> (show maxStringLen) <> ")")
+  quickCheckFromValue @ByteString "text"
+  quickCheckFromValue @ByteString ("varchar(" <>  (show maxStringLen) <> ")")
 
 connectivity :: Spec
 connectivity = do
@@ -48,18 +70,18 @@ connectivity = do
   it
     "Connect, explicit close"
     (do c <- connectWithString
-        close c
+        Internal.close c
         shouldBe True True)
   it
     "Double close fails"
     (shouldThrow
        (do c <- connectWithString
-           close c
-           close c)
+           Internal.close c
+           Internal.close c)
        (== DatabaseAlreadyClosed))
   it
     "Connect/disconnect loop"
-    (do sequence_ [connectWithString >>= close | _ <- [1 :: Int .. 10]]
+    (do sequence_ [connectWithString >>= Internal.close | _ <- [1 :: Int .. 10]]
         shouldBe True True)
 
 dataRetrieval :: Spec
@@ -67,15 +89,15 @@ dataRetrieval = do
   it
     "Basic sanity check"
     (do c <- connectWithString
-        exec c "DROP TABLE IF EXISTS test"
-        exec
+        Internal.exec c "DROP TABLE IF EXISTS test"
+        Internal.exec
           c
           "CREATE TABLE test (int integer, text text, bool bit, nt ntext, fl float)"
-        exec
+        Internal.exec
           c
           "INSERT INTO test VALUES (123, 'abc', 1, 'wib', 2.415), (456, 'def', 0, 'wibble',0.9999999999999), (NULL, NULL, NULL, NULL, NULL)"
-        rows <- query c "SELECT * FROM test"
-        close c
+        rows <- Internal.query c "SELECT * FROM test"
+        Internal.close c
         shouldBe
           rows
           [ [ Just (IntValue 123)
@@ -95,13 +117,13 @@ dataRetrieval = do
   it
     "Querying commands with no results"
     (do c <- connectWithString
-        rows1 <- query c "DROP TABLE IF EXISTS no_such_table"
+        rows1 <- Internal.query c "DROP TABLE IF EXISTS no_such_table"
         rows2 <-
-          stream
-            c
-            "DROP TABLE IF EXISTS no_such_table"
-            (\s _ -> pure (Stop s))
-            []
+          Internal.stream
+                     c
+                     "DROP TABLE IF EXISTS no_such_table"
+                     (\s _ -> pure (Stop s))
+                     []
         shouldBe (rows1 ++ rows2) [])
   quickCheckIt
     "integer"
@@ -163,6 +185,34 @@ dataRetrieval = do
 --------------------------------------------------------------------------------
 -- Combinators
 
+quickCheckFromValue ::
+     forall t. (Arbitrary t, Eq t, Show t, ToSql t, FromValue t) => String -> Spec
+quickCheckFromValue typ =
+  around
+    (bracket
+       (do c <- connectWithString
+           SQLServer.exec c "DROP TABLE IF EXISTS test"
+           SQLServer.exec c ("CREATE TABLE test (f " <> fromString typ <> ")")
+           pure c)
+       SQLServer.close)
+    (it
+       ("QuickCheck type: " <> typ)
+       (\c ->
+          property
+            (\input ->
+               monadicIO
+                 (do let q = "INSERT INTO test VALUES (" <> toSql (input :: t) <> ")"
+                     SQLServer.exec c q
+                     [Identity result] <- SQLServer.query c "SELECT * FROM test"
+                     monitor
+                       (counterexample
+                          (unlines
+                             [ "Expected: " ++ show input
+                             , "Actual: " ++ show result
+                             , "Query was: " ++ show q
+                             ]))
+                     assert (result == input)))))
+
 quickCheckIt ::
      forall t. (Eq t, Show t, Arbitrary t)
   => Text
@@ -173,10 +223,10 @@ quickCheckIt typ shower unpack =
   around
     (bracket
        (do c <- connectWithString
-           exec c "DROP TABLE IF EXISTS test"
-           exec c ("CREATE TABLE test (f " <> typ <> ")")
+           Internal.exec c "DROP TABLE IF EXISTS test"
+           Internal.exec c ("CREATE TABLE test (f " <> typ <> ")")
            pure c)
-       close)
+       Internal.close)
     (it
        ("QuickCheck type: " <> T.unpack typ)
        (\c ->
@@ -187,9 +237,9 @@ quickCheckIt typ shower unpack =
                      rows <-
                        liftIO
                          (try
-                            (do onException (exec c q) (putStrLn "Exec failed.")
+                            (do onException (Internal.exec c q) (putStrLn "Exec failed.")
                                 onException
-                                  (query c "SELECT * FROM test")
+                                  (Internal.query c "SELECT * FROM test")
                                   (putStrLn "Query failed!")))
                      let expected :: Either String t
                          expected = Right input
@@ -249,7 +299,7 @@ connectWithString = do
         "Need ODBC_TEST_CONNECTION_STRING environment variable.\n\
         \Example:\n\
         \ODBC_TEST_CONNECTION_STRING='DRIVER={ODBC Driver 13 for SQL Server};SERVER=127.0.0.1;Uid=SA;Pwd=Passw0rd;Encrypt=no'"
-    Just connStr -> connect (T.pack connStr)
+    Just connStr -> Internal.connect (T.pack connStr)
 
 --------------------------------------------------------------------------------
 -- Orphan instances
