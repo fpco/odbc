@@ -56,6 +56,8 @@ conversionTo = do
   quickCheckRoundtrip @Double "Double" "float"
   quickCheckRoundtrip @Double "Float" "float"
   quickCheckRoundtrip @Int "Int" "integer"
+  quickCheckRoundtrip @Int "Int" "int"
+  quickCheckRoundtrip @Int "Int" "bigint"
   quickCheckRoundtrip @Bool "Bool" "bit"
   quickCheckRoundtrip @Text "Text" "ntext"
   quickCheckRoundtrip @Text "Text" ("nvarchar(" <> (show maxStringLen) <> ")")
@@ -129,6 +131,13 @@ dataRetrieval = do
   quickCheckInternalRoundtrip
     "Int"
     "integer"
+    (T.pack . show)
+    (\case
+       IntValue b -> pure b
+       _ -> Nothing)
+  quickCheckInternalRoundtrip
+    "Int"
+    "bigint"
     (T.pack . show)
     (\case
        IntValue b -> pure b

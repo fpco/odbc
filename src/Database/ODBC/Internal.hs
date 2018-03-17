@@ -470,6 +470,28 @@ getData dbc stmt i col =
                 fmap
                   (Just . IntValue . fromIntegral)
                   (peek (intPtr :: Ptr Int32)))
+     | colType == sql_bigint ->
+       withMalloc
+         (\intPtr -> do
+            mlen <-
+              getTypedData dbc stmt sql_c_bigint i (coerce intPtr) (SQLLEN 8)
+            case mlen of
+              Nothing -> pure Nothing
+              Just {} ->
+                fmap
+                  (Just . IntValue . fromIntegral)
+                  (peek (intPtr :: Ptr Int32)))
+     | colType == sql_bigint ->
+       withMalloc
+         (\intPtr -> do
+            mlen <-
+              getTypedData dbc stmt sql_c_bigint i (coerce intPtr) (SQLLEN 8)
+            case mlen of
+              Nothing -> pure Nothing
+              Just {} ->
+                fmap
+                  (Just . IntValue . fromIntegral)
+                  (peek (intPtr :: Ptr Int32)))
      | colType == sql_smallint ->
        withMalloc
          (\intPtr -> do
@@ -810,8 +832,8 @@ sql_longvarchar = (-1)
 -- sql_longvarbinary :: SQLSMALLINT
 -- sql_longvarbinary = (-4)
 
--- sql_bigint :: SQLSMALLINT
--- sql_bigint = (-5)
+sql_bigint :: SQLSMALLINT
+sql_bigint = (-5)
 
 -- sql_tinyint :: SQLSMALLINT
 -- sql_tinyint = (-6)
@@ -839,6 +861,14 @@ sql_c_float = coerce sql_double
 
 sql_c_long :: SQLCTYPE
 sql_c_long = coerce sql_integer
+
+-- https://github.com/nil/nil/blob/753d7e714b7eab9eaab4ad6105fdf4267d6ad6f6/Windows/inc/sqlext.h#L592
+sql_c_bigint :: SQLCTYPE
+sql_c_bigint = coerce (sql_bigint - 20)
+
+-- https://github.com/nil/nil/blob/753d7e714b7eab9eaab4ad6105fdf4267d6ad6f6/Windows/inc/sqlext.h#L593
+sql_c_biguint :: SQLCTYPE
+sql_c_biguint = coerce (sql_bigint - 22)
 
 sql_c_short :: SQLCTYPE
 sql_c_short = coerce sql_smallint
