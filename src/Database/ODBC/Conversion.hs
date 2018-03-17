@@ -88,7 +88,7 @@ instance FromValue Float where
   fromValue =
     withNonNull
       (\case
-         DoubleValue x -> pure (realToFrac x)
+         FloatValue x -> pure (realToFrac x)
          v -> Left ("Expected Float, but got: " ++ show v))
 
 instance FromValue Bool where

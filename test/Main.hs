@@ -52,14 +52,14 @@ spec = do
 
 conversionTo :: Spec
 conversionTo = do
-  quickCheckFromValue @Float "Float" "float"
-  quickCheckFromValue @Double "Double" "float"
-  quickCheckFromValue @Int "Int" "integer"
-  quickCheckFromValue @Bool "Bool" "bit"
-  quickCheckFromValue @Text "Text" "ntext"
-  quickCheckFromValue @Text "Text" ("nvarchar(" <> (show maxStringLen) <> ")")
-  quickCheckFromValue @ByteString "ByteString" "text"
-  quickCheckFromValue @ByteString "ByteString" ("varchar(" <>  (show maxStringLen) <> ")")
+  quickCheckRoundtrip @Float "Float" "real"
+  quickCheckRoundtrip @Double "Double" "float"
+  quickCheckRoundtrip @Int "Int" "integer"
+  quickCheckRoundtrip @Bool "Bool" "bit"
+  quickCheckRoundtrip @Text "Text" "ntext"
+  quickCheckRoundtrip @Text "Text" ("nvarchar(" <> (show maxStringLen) <> ")")
+  quickCheckRoundtrip @ByteString "ByteString" "text"
+  quickCheckRoundtrip @ByteString "ByteString" ("varchar(" <>  (show maxStringLen) <> ")")
 
 connectivity :: Spec
 connectivity = do
@@ -125,63 +125,63 @@ dataRetrieval = do
             (\s _ -> pure (Stop s))
             []
         shouldBe (rows1 ++ rows2) [])
-  quickCheckIt
+  quickCheckInternalRoundtrip
     "Int"
     "integer"
     (T.pack . show)
     (\case
        IntValue b -> pure b
        _ -> Nothing)
-  quickCheckIt
+  quickCheckInternalRoundtrip
     "Int"
     "int"
     (T.pack . show)
     (\case
        IntValue b -> pure b
        _ -> Nothing)
-  quickCheckIt
+  quickCheckInternalRoundtrip
     "Double"
     "float"
     (T.pack . printf "%f")
     (\case
        DoubleValue b -> pure (realToFrac b :: Double)
        _ -> Nothing)
-  quickCheckIt
+  quickCheckInternalRoundtrip
     "Float"
     "float"
     (T.pack . printf "%f")
     (\case
        DoubleValue b -> pure (realToFrac b :: Float)
        _ -> Nothing)
-  quickCheckIt
+  quickCheckInternalRoundtrip
     "Text"
     "ntext"
     showText
     (\case
        TextValue b -> pure b
        _ -> Nothing)
-  quickCheckIt
+  quickCheckInternalRoundtrip
     "ByteString"
     "text"
     showBytes
     (\case
        ByteStringValue b -> pure b
        _ -> Nothing)
-  quickCheckIt
+  quickCheckInternalRoundtrip
     "Text"
     ("nvarchar(" <> T.pack (show maxStringLen) <> ")")
     showText
     (\case
        TextValue b -> pure b
        _ -> Nothing)
-  quickCheckIt
+  quickCheckInternalRoundtrip
     "ByteString"
     ("varchar(" <> T.pack (show maxStringLen) <> ")")
     showBytes
     (\case
        ByteStringValue b -> pure b
        _ -> Nothing)
-  quickCheckIt
+  quickCheckInternalRoundtrip
     "Bool"
     "bit"
     (\case
@@ -194,9 +194,12 @@ dataRetrieval = do
 --------------------------------------------------------------------------------
 -- Combinators
 
-quickCheckFromValue ::
-     forall t. (Arbitrary t, Eq t, Show t, ToSql t, FromValue t) => String -> String -> Spec
-quickCheckFromValue l typ =
+quickCheckRoundtrip ::
+     forall t. (Arbitrary t, Eq t, Show t, ToSql t, FromValue t)
+  => String
+  -> String
+  -> Spec
+quickCheckRoundtrip l typ =
   around
     (bracket
        (do c <- connectWithString
@@ -222,14 +225,14 @@ quickCheckFromValue l typ =
                              ]))
                      assert (result == input)))))
 
-quickCheckIt ::
+quickCheckInternalRoundtrip ::
      forall t. (Eq t, Show t, Arbitrary t)
   => Text
   -> Text
   -> (t -> Text)
   -> (Value -> Maybe t)
   -> Spec
-quickCheckIt hstype typ shower unpack =
+quickCheckInternalRoundtrip hstype typ shower unpack =
   around
     (bracket
        (do c <- connectWithString

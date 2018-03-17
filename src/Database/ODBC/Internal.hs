@@ -111,6 +111,8 @@ data Value
     -- ^ A simple boolean.
   | DoubleValue !Double
     -- ^ Floating point values that fit in a 'Double'.
+  | FloatValue !Float
+    -- ^ Floating point values that fit in a 'Float'.
   | IntValue !Int
     -- ^ Integer values that fit in an 'Int'.
   deriving (Eq, Show, Typeable, Ord, Generic, Data)
@@ -445,6 +447,18 @@ getData dbc stmt i col =
               Just {} -> do
                 !d <- fmap DoubleValue (peek floatPtr)
                 pure (Just d))
+      | colType == sql_real ->
+        withMalloc
+          (\floatPtr -> do
+             mlen <-
+               getTypedData dbc stmt sql_c_double i (coerce floatPtr) (SQLLEN 8)
+             -- SQLFLOAT is covered by SQL_C_DOUBLE: https://docs.microsoft.com/en-us/sql/odbc/reference/appendixes/c-data-types
+             -- Float is 8 bytes: https://technet.microsoft.com/en-us/library/ms172424(v=sql.110).aspx
+             case mlen of
+               Nothing -> pure Nothing
+               Just {} -> do
+                 !d <- fmap (FloatValue . (realToFrac :: Double -> Float)) (peek floatPtr)
+                 pure (Just d))
      | colType == sql_integer ->
        withMalloc
          (\intPtr -> do
@@ -751,8 +765,8 @@ sql_smallint = 5
 sql_float :: SQLSMALLINT
 sql_float = 6
 
--- sql_real :: SQLSMALLINT
--- sql_real = 7
+sql_real :: SQLSMALLINT
+sql_real = 7
 
 sql_double :: SQLSMALLINT
 sql_double = 8

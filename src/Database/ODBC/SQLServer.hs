@@ -255,7 +255,7 @@ instance ToSql Double where
 
 -- | Corresponds to FLOAT type of SQL Server.
 instance ToSql Float where
-  toSql = toSql . DoubleValue . realToFrac
+  toSql = toSql . FloatValue
 
 -- | Corresponds to INTEGER, BIGINT, SMALLINT, TINYINT types of SQL Server.
 instance ToSql Int where
@@ -335,6 +335,7 @@ renderValue =
     BoolValue True -> "1"
     BoolValue False -> "0"
     DoubleValue d -> Formatting.sformat Formatting.float d
+    FloatValue d -> Formatting.sformat Formatting.float (realToFrac d :: Double)
     IntValue d -> Formatting.sformat Formatting.int d
 
 -- | A very conservative character escape.
