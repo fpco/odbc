@@ -54,6 +54,7 @@ conversionTo :: Spec
 conversionTo = do
   quickCheckRoundtrip @Float "Float" "real"
   quickCheckRoundtrip @Double "Double" "float"
+  quickCheckRoundtrip @Double "Float" "float"
   quickCheckRoundtrip @Int "Int" "integer"
   quickCheckRoundtrip @Bool "Bool" "bit"
   quickCheckRoundtrip @Text "Text" "ntext"
@@ -152,6 +153,13 @@ dataRetrieval = do
     (T.pack . printf "%f")
     (\case
        DoubleValue b -> pure (realToFrac b :: Float)
+       _ -> Nothing)
+  quickCheckInternalRoundtrip
+    "Float"
+    "real"
+    (T.pack . printf "%f")
+    (\case
+       FloatValue b -> pure b
        _ -> Nothing)
   quickCheckInternalRoundtrip
     "Text"
