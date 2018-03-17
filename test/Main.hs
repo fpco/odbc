@@ -52,14 +52,14 @@ spec = do
 
 conversionTo :: Spec
 conversionTo = do
-  quickCheckFromValue @Float "float"
-  quickCheckFromValue @Double "float"
-  quickCheckFromValue @Int "integer"
-  quickCheckFromValue @Bool "bit"
-  quickCheckFromValue @Text "ntext"
-  quickCheckFromValue @Text ("nvarchar(" <> (show maxStringLen) <> ")")
-  quickCheckFromValue @ByteString "text"
-  quickCheckFromValue @ByteString ("varchar(" <>  (show maxStringLen) <> ")")
+  quickCheckFromValue @Float "Float" "float"
+  quickCheckFromValue @Double "Double" "float"
+  quickCheckFromValue @Int "Int" "integer"
+  quickCheckFromValue @Bool "Bool" "bit"
+  quickCheckFromValue @Text "Text" "ntext"
+  quickCheckFromValue @Text "Text" ("nvarchar(" <> (show maxStringLen) <> ")")
+  quickCheckFromValue @ByteString "ByteString" "text"
+  quickCheckFromValue @ByteString "ByteString" ("varchar(" <>  (show maxStringLen) <> ")")
 
 connectivity :: Spec
 connectivity = do
@@ -120,60 +120,69 @@ dataRetrieval = do
         rows1 <- Internal.query c "DROP TABLE IF EXISTS no_such_table"
         rows2 <-
           Internal.stream
-                     c
-                     "DROP TABLE IF EXISTS no_such_table"
-                     (\s _ -> pure (Stop s))
-                     []
+            c
+            "DROP TABLE IF EXISTS no_such_table"
+            (\s _ -> pure (Stop s))
+            []
         shouldBe (rows1 ++ rows2) [])
   quickCheckIt
+    "Int"
     "integer"
     (T.pack . show)
     (\case
        IntValue b -> pure b
        _ -> Nothing)
   quickCheckIt
+    "Int"
     "int"
     (T.pack . show)
     (\case
        IntValue b -> pure b
        _ -> Nothing)
   quickCheckIt
+    "Double"
     "float"
     (T.pack . printf "%f")
     (\case
        DoubleValue b -> pure (realToFrac b :: Double)
        _ -> Nothing)
   quickCheckIt
+    "Float"
     "float"
     (T.pack . printf "%f")
     (\case
        DoubleValue b -> pure (realToFrac b :: Float)
        _ -> Nothing)
   quickCheckIt
+    "Text"
     "ntext"
     showText
     (\case
        TextValue b -> pure b
        _ -> Nothing)
   quickCheckIt
+    "ByteString"
     "text"
     showBytes
     (\case
        ByteStringValue b -> pure b
        _ -> Nothing)
   quickCheckIt
+    "Text"
     ("nvarchar(" <> T.pack (show maxStringLen) <> ")")
     showText
     (\case
        TextValue b -> pure b
        _ -> Nothing)
   quickCheckIt
+    "ByteString"
     ("varchar(" <> T.pack (show maxStringLen) <> ")")
     showBytes
     (\case
        ByteStringValue b -> pure b
        _ -> Nothing)
   quickCheckIt
+    "Bool"
     "bit"
     (\case
        True -> "1"
@@ -186,8 +195,8 @@ dataRetrieval = do
 -- Combinators
 
 quickCheckFromValue ::
-     forall t. (Arbitrary t, Eq t, Show t, ToSql t, FromValue t) => String -> Spec
-quickCheckFromValue typ =
+     forall t. (Arbitrary t, Eq t, Show t, ToSql t, FromValue t) => String -> String -> Spec
+quickCheckFromValue l typ =
   around
     (bracket
        (do c <- connectWithString
@@ -196,7 +205,7 @@ quickCheckFromValue typ =
            pure c)
        SQLServer.close)
     (it
-       ("QuickCheck type: " <> typ)
+       ("QuickCheck roundtrip: HS=" <> l <> ", SQL="  <> typ)
        (\c ->
           property
             (\input ->
@@ -216,10 +225,11 @@ quickCheckFromValue typ =
 quickCheckIt ::
      forall t. (Eq t, Show t, Arbitrary t)
   => Text
+  -> Text
   -> (t -> Text)
   -> (Value -> Maybe t)
   -> Spec
-quickCheckIt typ shower unpack =
+quickCheckIt hstype typ shower unpack =
   around
     (bracket
        (do c <- connectWithString
@@ -228,7 +238,7 @@ quickCheckIt typ shower unpack =
            pure c)
        Internal.close)
     (it
-       ("QuickCheck type: " <> T.unpack typ)
+       ("QuickCheck roundtrip: HS=" <> T.unpack  hstype <> ", SQL="  <> T.unpack typ)
        (\c ->
           property
             (\input ->
