@@ -30,7 +30,7 @@ library
     bytestring,
     text,
     unliftio-core,
-    formatting,
+    formatting >= 6.3.1,
     containers
 
 executable odbc
