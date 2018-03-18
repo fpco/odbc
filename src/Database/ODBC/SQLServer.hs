@@ -59,11 +59,14 @@ import           Data.String
 import           Data.Text (Text)
 import qualified Data.Text as T
 import qualified Data.Text.Lazy as LT
+import           Data.Time
 import           Data.Word
 import           Database.ODBC.Conversion
 import           Database.ODBC.Internal (Value(..), Connection)
 import qualified Database.ODBC.Internal as Internal
 import qualified Formatting
+import           Formatting ((%))
+import           Formatting.Time as Formatting
 import           GHC.Generics
 
 -- $building
@@ -266,6 +269,10 @@ instance ToSql Int where
 instance ToSql Word8 where
   toSql = toSql . ByteValue
 
+-- | Corresponds to DATE type of SQL Server.
+instance ToSql Day where
+  toSql = toSql . DayValue
+
 --------------------------------------------------------------------------------
 -- Top-level functions
 
@@ -339,13 +346,15 @@ renderValue :: Value -> Text
 renderValue =
   \case
     TextValue t -> "(N'" <> T.concatMap escapeChar t <> "')"
-    ByteStringValue xs -> "('" <> T.concat (map escapeChar8 (S.unpack xs)) <> "')"
+    ByteStringValue xs ->
+      "('" <> T.concat (map escapeChar8 (S.unpack xs)) <> "')"
     BoolValue True -> "1"
     BoolValue False -> "0"
     ByteValue n -> Formatting.sformat Formatting.int n
     DoubleValue d -> Formatting.sformat Formatting.float d
     FloatValue d -> Formatting.sformat Formatting.float (realToFrac d :: Double)
     IntValue d -> Formatting.sformat Formatting.int d
+    DayValue d -> Formatting.sformat ("'" % Formatting.dateDash % "'") d
 
 -- | A very conservative character escape.
 escapeChar8 :: Word8 -> Text

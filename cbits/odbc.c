@@ -245,3 +245,13 @@ void odbc_ProcessLogMessages(EnvAndDbc *envAndDbc, SQLSMALLINT plm_handle_type, 
     plm_cRecNmbr++;
   }
 }
+
+SQLSMALLINT DATE_STRUCT_year(DATE_STRUCT *d){
+  return d->year;
+}
+SQLUSMALLINT DATE_STRUCT_month(DATE_STRUCT *d){
+  return d->month;
+}
+SQLUSMALLINT DATE_STRUCT_day(DATE_STRUCT *d){
+  return d->day;
+}

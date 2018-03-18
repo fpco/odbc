@@ -54,4 +54,7 @@ repl c = do
             ODBC.ByteStringValue bs -> show bs
             ODBC.BoolValue b -> show b
             ODBC.DoubleValue d -> printf "%f" d
+            ODBC.FloatValue d -> printf "%f" d
             ODBC.IntValue i -> show i
+            ODBC.DayValue d -> show d
+            ODBC.ByteValue b -> show b

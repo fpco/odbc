@@ -59,6 +59,7 @@ import           Data.String
 import           Data.Text (Text)
 import qualified Data.Text as T
 import qualified Data.Text.Foreign as T
+import           Data.Time
 import           Foreign hiding (void)
 import           Foreign.C
 import           GHC.Generics
@@ -117,6 +118,8 @@ data Value
     -- ^ Integer values that fit in an 'Int'.
   | ByteValue !Word8
     -- ^ Values that fit in one byte.
+  | DayValue !Day
+    -- ^ Date (year, month, day) values.
   deriving (Eq, Show, Typeable, Ord, Generic, Data)
 instance NFData Value
 
@@ -449,18 +452,21 @@ getData dbc stmt i col =
               Just {} -> do
                 !d <- fmap DoubleValue (peek floatPtr)
                 pure (Just d))
-      | colType == sql_real ->
-        withMalloc
-          (\floatPtr -> do
-             mlen <-
-               getTypedData dbc stmt sql_c_double i (coerce floatPtr) (SQLLEN 8)
+     | colType == sql_real ->
+       withMalloc
+         (\floatPtr -> do
+            mlen <-
+              getTypedData dbc stmt sql_c_double i (coerce floatPtr) (SQLLEN 8)
              -- SQLFLOAT is covered by SQL_C_DOUBLE: https://docs.microsoft.com/en-us/sql/odbc/reference/appendixes/c-data-types
              -- Float is 8 bytes: https://technet.microsoft.com/en-us/library/ms172424(v=sql.110).aspx
-             case mlen of
-               Nothing -> pure Nothing
-               Just {} -> do
-                 !d <- fmap (FloatValue . (realToFrac :: Double -> Float)) (peek floatPtr)
-                 pure (Just d))
+            case mlen of
+              Nothing -> pure Nothing
+              Just {} -> do
+                !d <-
+                  fmap
+                    (FloatValue . (realToFrac :: Double -> Float))
+                    (peek floatPtr)
+                pure (Just d))
      | colType == sql_integer ->
        withMalloc
          (\intPtr -> do
@@ -501,10 +507,22 @@ getData dbc stmt i col =
               getTypedData dbc stmt sql_c_short i (coerce intPtr) (SQLLEN 1)
             case mlen of
               Nothing -> pure Nothing
+              Just {} -> fmap (Just . ByteValue) (peek (intPtr :: Ptr Word8)))
+     | colType == sql_type_date ->
+       withMallocBytes
+         3
+         (\datePtr -> do
+            mlen <-
+              getTypedData dbc stmt sql_c_date i (coerce datePtr) (SQLLEN 3)
+            case mlen of
+              Nothing -> pure Nothing
               Just {} ->
                 fmap
-                  (Just . ByteValue)
-                  (peek (intPtr :: Ptr Word8)))
+                  (Just . DayValue)
+                  (fromGregorian <$>
+                   (fmap fromIntegral (odbc_DATE_STRUCT_year datePtr)) <*>
+                   (fmap fromIntegral (odbc_DATE_STRUCT_month datePtr)) <*>
+                   (fmap fromIntegral (odbc_DATE_STRUCT_day datePtr))))
      | otherwise ->
        throwIO
          (UnknownDataType
@@ -654,7 +672,7 @@ newtype RETCODE = RETCODE Int16
   deriving (Show, Eq)
 
 -- https://github.com/Microsoft/ODBC-Specification/blob/753d7e714b7eab9eaab4ad6105fdf4267d6ad6f6/Windows/inc/sqltypes.h#L89
-newtype SQLUSMALLINT = SQLUSMALLINT Word16 deriving (Show, Eq, Storable, Enum)
+newtype SQLUSMALLINT = SQLUSMALLINT Word16 deriving (Show, Eq, Storable, Integral, Enum, Real, Num, Ord)
 
 -- https://github.com/Microsoft/ODBC-Specification/blob/753d7e714b7eab9eaab4ad6105fdf4267d6ad6f6/Windows/inc/sqltypes.h#L52..L52
 newtype SQLUCHAR = SQLUCHAR Word8 deriving (Show, Eq, Storable)
@@ -663,7 +681,7 @@ newtype SQLUCHAR = SQLUCHAR Word8 deriving (Show, Eq, Storable)
 newtype SQLCHAR = SQLCHAR CChar deriving (Show, Eq, Storable)
 
 -- https://github.com/Microsoft/ODBC-Specification/blob/753d7e714b7eab9eaab4ad6105fdf4267d6ad6f6/Windows/inc/sqltypes.h#L88
-newtype SQLSMALLINT = SQLSMALLINT Int16 deriving (Show, Eq, Storable, Num)
+newtype SQLSMALLINT = SQLSMALLINT Int16 deriving (Show, Eq, Storable, Num, Integral, Enum, Ord, Real)
 
 -- https://github.com/Microsoft/ODBC-Specification/blob/753d7e714b7eab9eaab4ad6105fdf4267d6ad6f6/Windows/inc/sqltypes.h#L64
 newtype SQLLEN = SQLLEN Int64 deriving (Show, Eq, Storable, Num)
@@ -676,6 +694,8 @@ newtype SQLINTEGER = SQLINTEGER Int64 deriving (Show, Eq, Storable, Num)
 
 -- https://github.com/Microsoft/ODBC-Specification/blob/753d7e714b7eab9eaab4ad6105fdf4267d6ad6f6/Windows/inc/sqltypes.h#L332
 newtype SQLWCHAR = SQLWCHAR CWString deriving (Show, Eq, Storable)
+
+data DATE_STRUCT
 
 --------------------------------------------------------------------------------
 -- Foreign functions
@@ -737,6 +757,15 @@ foreign import ccall "odbc odbc_SQLDescribeColW"
     -> Ptr SQLSMALLINT
     -> IO RETCODE
 
+foreign import ccall "odbc DATE_STRUCT_year" odbc_DATE_STRUCT_year
+               :: Ptr DATE_STRUCT -> IO SQLSMALLINT
+
+foreign import ccall "odbc DATE_STRUCT_month" odbc_DATE_STRUCT_month
+               :: Ptr DATE_STRUCT -> IO SQLUSMALLINT
+
+foreign import ccall "odbc DATE_STRUCT_day" odbc_DATE_STRUCT_day
+               :: Ptr DATE_STRUCT -> IO SQLUSMALLINT
+
 --------------------------------------------------------------------------------
 -- Foreign utils
 
@@ -794,6 +823,9 @@ sql_real = 7
 
 sql_double :: SQLSMALLINT
 sql_double = 8
+
+sql_type_date :: SQLSMALLINT
+sql_type_date = 91
 
 -- sql_datetime :: SQLSMALLINT
 -- sql_datetime = 9
@@ -877,3 +909,6 @@ sql_c_short = coerce sql_smallint
 
 sql_c_bit :: SQLCTYPE
 sql_c_bit = coerce sql_bit
+
+sql_c_date :: SQLCTYPE
+sql_c_date = coerce (9 :: SQLSMALLINT)

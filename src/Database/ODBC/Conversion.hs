@@ -15,6 +15,7 @@ import qualified Data.ByteString.Lazy as L
 import           Data.Functor.Identity
 import           Data.Text (Text)
 import qualified Data.Text.Lazy as LT
+import           Data.Time
 import           Data.Word
 import           Database.ODBC.Internal
 
@@ -105,6 +106,13 @@ instance FromValue Bool where
       (\case
          BoolValue x -> pure (id x)
          v -> Left ("Expected Bool, but got: " ++ show v))
+
+instance FromValue Day where
+  fromValue =
+    withNonNull
+      (\case
+         DayValue x -> pure (id x)
+         v -> Left ("Expected Day, but got: " ++ show v))
 
 --------------------------------------------------------------------------------
 -- Producing rows

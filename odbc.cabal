@@ -31,7 +31,8 @@ library
     text,
     unliftio-core,
     formatting >= 6.3.1,
-    containers
+    containers,
+    time
 
 executable odbc
   hs-source-dirs:    app
@@ -48,7 +49,7 @@ executable odbc
 test-suite test
   default-language:  Haskell2010
   type: exitcode-stdio-1.0
-  build-depends: base, text, odbc, hspec, QuickCheck, bytestring
+  build-depends: base, text, odbc, hspec, QuickCheck, bytestring, time
   ghc-options: -threaded
   hs-source-dirs: test
   main-is: Main.hs

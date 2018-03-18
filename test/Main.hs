@@ -25,7 +25,7 @@ import           Data.Monoid
 import           Data.String
 import           Data.Text (Text)
 import qualified Data.Text as T
-import qualified Data.Text.IO as T
+import           Data.Time
 import           Data.Word
 import           Database.ODBC.Conversion (FromValue(..))
 import           Database.ODBC.Internal (Value (..), Connection, ODBCException(..), Step(..))
@@ -69,6 +69,7 @@ conversionTo = do
         roundtrip @Int "minBound(Int32)" "Int" "int" (fromIntegral (minBound :: Int32))
         roundtrip @Int "minBound(Int16)" "Int" "smallint" (fromIntegral (minBound :: Int16))
         roundtrip @Word8 "minBound(Word8)" "Word8" "tinyint" minBound)
+  quickCheckRoundtrip @Day "Day" "date"
   quickCheckRoundtrip @Float "Float" "real"
   quickCheckRoundtrip @Double "Double" "float"
   quickCheckRoundtrip @Double "Float" "float"
@@ -368,3 +369,8 @@ instance Arbitrary ByteString where
       (S8.filter (\c -> isAscii c && validTextChar c) .
        S8.pack . take maxStringLen)
       arbitrary
+
+instance Arbitrary Day where
+  arbitrary = do
+    offset <- choose (0, 30000)
+    pure (addDays offset (fromGregorian 1753 01 01))
