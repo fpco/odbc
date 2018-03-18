@@ -160,6 +160,10 @@ instance FromRow Int where
   fromRow [v] = fromValue v
   fromRow _ = Left "Unexpected number of fields in row"
 
+instance FromRow Day where
+  fromRow [v] = fromValue v
+  fromRow _ = Left "Unexpected number of fields in row"
+
 instance FromRow Double where
   fromRow [v] = fromValue v
   fromRow _ = Left "Unexpected number of fields in row"
