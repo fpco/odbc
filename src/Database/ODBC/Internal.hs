@@ -116,6 +116,7 @@ data Value
   | IntValue !Int
     -- ^ Integer values that fit in an 'Int'.
   | ByteValue !Word8
+    -- ^ Values that fit in one byte.
   deriving (Eq, Show, Typeable, Ord, Generic, Data)
 instance NFData Value
 
