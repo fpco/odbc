@@ -858,8 +858,8 @@ sql_c_char = coerce sql_char
 sql_c_double :: SQLCTYPE
 sql_c_double = coerce sql_double
 
-sql_c_float :: SQLCTYPE
-sql_c_float = coerce sql_double
+-- sql_c_float :: SQLCTYPE
+-- sql_c_float = coerce sql_double
 
 sql_c_long :: SQLCTYPE
 sql_c_long = coerce sql_integer
@@ -869,8 +869,8 @@ sql_c_bigint :: SQLCTYPE
 sql_c_bigint = coerce (sql_bigint - 20)
 
 -- https://github.com/nil/nil/blob/753d7e714b7eab9eaab4ad6105fdf4267d6ad6f6/Windows/inc/sqlext.h#L593
-sql_c_biguint :: SQLCTYPE
-sql_c_biguint = coerce (sql_bigint - 22)
+-- sql_c_biguint :: SQLCTYPE
+-- sql_c_biguint = coerce (sql_bigint - 22)
 
 sql_c_short :: SQLCTYPE
 sql_c_short = coerce sql_smallint
