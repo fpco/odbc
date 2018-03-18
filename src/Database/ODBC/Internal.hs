@@ -115,6 +115,7 @@ data Value
     -- ^ Floating point values that fit in a 'Float'.
   | IntValue !Int
     -- ^ Integer values that fit in an 'Int'.
+  | ByteValue !Word8
   deriving (Eq, Show, Typeable, Ord, Generic, Data)
 instance NFData Value
 
@@ -480,18 +481,7 @@ getData dbc stmt i col =
               Just {} ->
                 fmap
                   (Just . IntValue . fromIntegral)
-                  (peek (intPtr :: Ptr Int32)))
-     | colType == sql_bigint ->
-       withMalloc
-         (\intPtr -> do
-            mlen <-
-              getTypedData dbc stmt sql_c_bigint i (coerce intPtr) (SQLLEN 8)
-            case mlen of
-              Nothing -> pure Nothing
-              Just {} ->
-                fmap
-                  (Just . IntValue . fromIntegral)
-                  (peek (intPtr :: Ptr Int32)))
+                  (peek (intPtr :: Ptr Int64)))
      | colType == sql_smallint ->
        withMalloc
          (\intPtr -> do
@@ -503,6 +493,17 @@ getData dbc stmt i col =
                 fmap
                   (Just . IntValue . fromIntegral)
                   (peek (intPtr :: Ptr Int16)))
+     | colType == sql_tinyint ->
+       withMalloc
+         (\intPtr -> do
+            mlen <-
+              getTypedData dbc stmt sql_c_short i (coerce intPtr) (SQLLEN 1)
+            case mlen of
+              Nothing -> pure Nothing
+              Just {} ->
+                fmap
+                  (Just . ByteValue)
+                  (peek (intPtr :: Ptr Word8)))
      | otherwise ->
        throwIO
          (UnknownDataType
@@ -835,8 +836,8 @@ sql_longvarchar = (-1)
 sql_bigint :: SQLSMALLINT
 sql_bigint = (-5)
 
--- sql_tinyint :: SQLSMALLINT
--- sql_tinyint = (-6)
+sql_tinyint :: SQLSMALLINT
+sql_tinyint = (-6)
 
 sql_bit :: SQLSMALLINT
 sql_bit = (-7)

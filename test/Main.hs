@@ -1,3 +1,4 @@
+{-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE AllowAmbiguousTypes #-}
 {-# LANGUAGE LambdaCase #-}
@@ -19,10 +20,13 @@ import           Data.ByteString (ByteString)
 import qualified Data.ByteString.Char8 as S8
 import           Data.Char
 import           Data.Functor.Identity
+import           Data.Int
 import           Data.Monoid
 import           Data.String
 import           Data.Text (Text)
 import qualified Data.Text as T
+import qualified Data.Text.IO as T
+import           Data.Word
 import           Database.ODBC.Conversion (FromValue(..))
 import           Database.ODBC.Internal (Value (..), Connection, ODBCException(..), Step(..))
 import qualified Database.ODBC.Internal as Internal
@@ -52,11 +56,23 @@ spec = do
 
 conversionTo :: Spec
 conversionTo = do
+  -- See <https://docs.microsoft.com/en-us/sql/t-sql/data-types/int-bigint-smallint-and-tinyint-transact-sql>
+  describe
+    "maxBound"
+    (do roundtrip @Int "maxBound(Int64)" "Int" "bigint" maxBound
+        roundtrip @Int "maxBound(Int32)" "Int" "int" (fromIntegral (maxBound :: Int32))
+        roundtrip @Int "maxBound(Int16)" "Int" "smallint" (fromIntegral (maxBound :: Int16))
+        roundtrip @Word8 "maxBound(Word8)" "Word8" "tinyint" maxBound)
+  describe
+    "minBound"
+    (do roundtrip @Int "minBound(Int64)" "Int" "bigint" minBound
+        roundtrip @Int "minBound(Int32)" "Int" "int" (fromIntegral (minBound :: Int32))
+        roundtrip @Int "minBound(Int16)" "Int" "smallint" (fromIntegral (minBound :: Int16))
+        roundtrip @Word8 "minBound(Word8)" "Word8" "tinyint" minBound)
   quickCheckRoundtrip @Float "Float" "real"
   quickCheckRoundtrip @Double "Double" "float"
   quickCheckRoundtrip @Double "Float" "float"
-  quickCheckRoundtrip @Int "Int" "integer"
-  quickCheckRoundtrip @Int "Int" "int"
+  quickCheckRoundtrip @Word8 "Word8" "tinyint"
   quickCheckRoundtrip @Int "Int" "bigint"
   quickCheckRoundtrip @Bool "Bool" "bit"
   quickCheckRoundtrip @Text "Text" "ntext"
@@ -130,21 +146,7 @@ dataRetrieval = do
         shouldBe (rows1 ++ rows2) [])
   quickCheckInternalRoundtrip
     "Int"
-    "integer"
-    (T.pack . show)
-    (\case
-       IntValue b -> pure b
-       _ -> Nothing)
-  quickCheckInternalRoundtrip
-    "Int"
     "bigint"
-    (T.pack . show)
-    (\case
-       IntValue b -> pure b
-       _ -> Nothing)
-  quickCheckInternalRoundtrip
-    "Int"
-    "int"
     (T.pack . show)
     (\case
        IntValue b -> pure b
@@ -210,6 +212,28 @@ dataRetrieval = do
 
 --------------------------------------------------------------------------------
 -- Combinators
+
+roundtrip ::
+     forall t. (Eq t, Show t, ToSql t, FromValue t)
+  => String
+  -> String
+  -> String
+  -> t
+  -> Spec
+roundtrip why l typ input =
+  it
+    ("Roundtrip " <> why <> ": HS=" <> l <> ", SQL=" <> typ)
+    (do c <- connectWithString
+        SQLServer.exec c "DROP TABLE IF EXISTS test"
+        --liftIO (T.putStrLn (SQLServer.renderQuery (("CREATE TABLE test (f " <> fromString typ <> ")"))))
+        SQLServer.exec c ("CREATE TABLE test (f " <> fromString typ <> ")")
+        let q = "INSERT INTO test VALUES (" <> toSql (input) <> ")"
+        -- liftIO (T.putStrLn (SQLServer.renderQuery q))
+        SQLServer.exec c q
+        --liftIO (putStrLn "ook")
+        [Identity (!result)] <- SQLServer.query c "SELECT * FROM test"
+        SQLServer.close c
+        shouldBe result input)
 
 quickCheckRoundtrip ::
      forall t. (Arbitrary t, Eq t, Show t, ToSql t, FromValue t)

@@ -15,6 +15,7 @@ import qualified Data.ByteString.Lazy as L
 import           Data.Functor.Identity
 import           Data.Text (Text)
 import qualified Data.Text.Lazy as LT
+import           Data.Word
 import           Database.ODBC.Internal
 
 --------------------------------------------------------------------------------
@@ -91,6 +92,13 @@ instance FromValue Float where
          FloatValue x -> pure (realToFrac x)
          v -> Left ("Expected Float, but got: " ++ show v))
 
+instance FromValue Word8 where
+  fromValue =
+    withNonNull
+      (\case
+         ByteValue x -> pure x
+         v -> Left ("Expected Byte, but got: " ++ show v))
+
 instance FromValue Bool where
   fromValue =
     withNonNull
@@ -149,6 +157,10 @@ instance FromRow Double where
   fromRow _ = Left "Unexpected number of fields in row"
 
 instance FromRow Float where
+  fromRow [v] = fromValue v
+  fromRow _ = Left "Unexpected number of fields in row"
+
+instance FromRow Word8 where
   fromRow [v] = fromValue v
   fromRow _ = Left "Unexpected number of fields in row"
 

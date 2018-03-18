@@ -38,6 +38,7 @@ module Database.ODBC.SQLServer
     -- $exceptions
 
   , Internal.ODBCException(..)
+  , renderQuery
   ) where
 
 
@@ -257,9 +258,13 @@ instance ToSql Double where
 instance ToSql Float where
   toSql = toSql . FloatValue
 
--- | Corresponds to INTEGER, BIGINT, SMALLINT, TINYINT types of SQL Server.
+-- | Corresponds to BIGINT type of SQL Server.
 instance ToSql Int where
   toSql = toSql . IntValue
+
+-- | Corresponds to TINYINT type of SQL Server.
+instance ToSql Word8 where
+  toSql = toSql . ByteValue
 
 --------------------------------------------------------------------------------
 -- Top-level functions
@@ -280,6 +285,9 @@ query c (Query ps) = do
   case mapM fromRow rows of
     Right rows' -> pure rows'
     Left e -> liftIO (throwIO (Internal.DataRetrievalError e))
+
+renderQuery :: Query -> Text
+renderQuery (Query ps) = (renderParts (toList ps))
 
 -- | Stream results like a fold with the option to stop at any time.
 stream ::
@@ -334,6 +342,7 @@ renderValue =
     ByteStringValue xs -> "('" <> T.concat (map escapeChar8 (S.unpack xs)) <> "')"
     BoolValue True -> "1"
     BoolValue False -> "0"
+    ByteValue n -> Formatting.sformat Formatting.int n
     DoubleValue d -> Formatting.sformat Formatting.float d
     FloatValue d -> Formatting.sformat Formatting.float (realToFrac d :: Double)
     IntValue d -> Formatting.sformat Formatting.int d
