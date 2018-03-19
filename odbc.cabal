@@ -7,7 +7,7 @@ version:             0.0.1
 license:             BSD3
 license-file:        LICENSE
 build-type:          Simple
-extra-source-files:  README.md cbits/ms.h
+extra-source-files:  README.md
 cabal-version:       >=1.10
 
 library

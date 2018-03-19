@@ -541,13 +541,9 @@ getData dbc stmt i col =
                 fmap
                   (Just . TimeOfDayValue)
                   (TimeOfDay <$>
-                   (fmap fromIntegral (odbc_SQL_SS_TIME2_STRUCT_hour datePtr)) <*>
-                   (fmap fromIntegral (odbc_SQL_SS_TIME2_STRUCT_minute datePtr)) <*>
-                   ((+) <$>
-                    (fmap fromIntegral (odbc_SQL_SS_TIME2_STRUCT_second datePtr)) <*>
-                    (fmap
-                       (\frac -> fromIntegral frac / 1000000000)
-                       (odbc_SQL_SS_TIME2_STRUCT_fraction datePtr)))))
+                   (fmap fromIntegral (odbc_TIME_STRUCT_hour datePtr)) <*>
+                   (fmap fromIntegral (odbc_TIME_STRUCT_minute datePtr)) <*>
+                   (fmap fromIntegral (odbc_TIME_STRUCT_second datePtr))))
      | colType == sql_type_timestamp ->
        withMallocBytes
          16
@@ -762,8 +758,8 @@ newtype SQLWCHAR = SQLWCHAR CWString deriving (Show, Eq, Storable)
 -- https://docs.microsoft.com/en-us/sql/odbc/reference/appendixes/c-data-types
 data DATE_STRUCT
 
--- https://docs.microsoft.com/en-us/sql/relational-databases/native-client-odbc-date-time/data-type-support-for-odbc-date-and-time-improvements
-data SQL_SS_TIME2_STRUCT
+-- https://docs.microsoft.com/en-us/sql/odbc/reference/appendixes/c-data-types
+data TIME_STRUCT
 
 -- https://docs.microsoft.com/en-us/sql/odbc/reference/appendixes/c-data-types
 data TIMESTAMP_STRUCT
@@ -837,17 +833,12 @@ foreign import ccall "odbc DATE_STRUCT_month" odbc_DATE_STRUCT_month
 foreign import ccall "odbc DATE_STRUCT_day" odbc_DATE_STRUCT_day
  :: Ptr DATE_STRUCT -> IO SQLUSMALLINT
 
-foreign import ccall "odbc SQL_SS_TIME2_STRUCT_hour" odbc_SQL_SS_TIME2_STRUCT_hour
- :: Ptr SQL_SS_TIME2_STRUCT -> IO SQLUSMALLINT
-
-foreign import ccall "odbc SQL_SS_TIME2_STRUCT_minute" odbc_SQL_SS_TIME2_STRUCT_minute
- :: Ptr SQL_SS_TIME2_STRUCT -> IO SQLUSMALLINT
-
-foreign import ccall "odbc SQL_SS_TIME2_STRUCT_second" odbc_SQL_SS_TIME2_STRUCT_second
- :: Ptr SQL_SS_TIME2_STRUCT -> IO SQLUSMALLINT
-
-foreign import ccall "odbc SQL_SS_TIME2_STRUCT_fraction" odbc_SQL_SS_TIME2_STRUCT_fraction
- :: Ptr SQL_SS_TIME2_STRUCT -> IO SQLUINTEGER
+foreign import ccall "odbc TIME_STRUCT_hour" odbc_TIME_STRUCT_hour
+  :: Ptr TIME_STRUCT -> IO SQLUSMALLINT
+foreign import ccall "odbc TIME_STRUCT_minute" odbc_TIME_STRUCT_minute
+  :: Ptr TIME_STRUCT -> IO SQLUSMALLINT
+foreign import ccall "odbc TIME_STRUCT_second" odbc_TIME_STRUCT_second
+  :: Ptr TIME_STRUCT -> IO SQLUSMALLINT
 
 foreign import ccall "odbc TIMESTAMP_STRUCT_year" odbc_TIMESTAMP_STRUCT_year
   :: Ptr TIMESTAMP_STRUCT -> IO SQLSMALLINT

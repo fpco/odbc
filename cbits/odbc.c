@@ -261,22 +261,16 @@ SQLUSMALLINT DATE_STRUCT_day(DATE_STRUCT *d){
 }
 
 ////////////////////////////////////////////////////////////////////////////////
-// Accessors for SQL_SS_TIME2_STRUCT
+// Accessors for TIME_STRUCT
 
-// Comes from:
-// https://docs.microsoft.com/en-us/sql/relational-databases/native-client-odbc-date-time/data-type-support-for-odbc-date-and-time-improvements
-
-SQLUSMALLINT SQL_SS_TIME2_STRUCT_hour(SQL_SS_TIME2_STRUCT *t){
+SQLUSMALLINT TIME_STRUCT_hour(TIME_STRUCT *t){
   return t->hour;
 }
-SQLUSMALLINT SQL_SS_TIME2_STRUCT_minute(SQL_SS_TIME2_STRUCT *t){
+SQLUSMALLINT TIME_STRUCT_minute(TIME_STRUCT *t){
   return t->minute;
 }
-SQLUSMALLINT SQL_SS_TIME2_STRUCT_second(SQL_SS_TIME2_STRUCT *t){
+SQLUSMALLINT TIME_STRUCT_second(TIME_STRUCT *t){
   return t->second;
-}
-SQLUINTEGER SQL_SS_TIME2_STRUCT_fraction(SQL_SS_TIME2_STRUCT *t){
-  return t->fraction;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
