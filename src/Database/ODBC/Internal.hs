@@ -527,10 +527,17 @@ getData dbc stmt i col =
                    (fmap fromIntegral (odbc_DATE_STRUCT_day datePtr))))
      | colType == sql_ss_time2 ->
        withMallocBytes
-         3
+         12 -- This struct is padded to 12 bytes on both 32-bit and 64-bit operating systems.
+            -- https://docs.microsoft.com/en-us/sql/relational-databases/native-client-odbc-date-time/data-type-support-for-odbc-date-and-time-improvements
          (\datePtr -> do
             mlen <-
-              getTypedData dbc stmt sql_c_ss_time2 i (coerce datePtr) (SQLLEN 3)
+              getTypedData
+                dbc
+                stmt
+                sql_c_ss_time2
+                i
+                (coerce datePtr)
+                (SQLLEN 12)
             case mlen of
               Nothing -> pure Nothing
               Just {} ->
@@ -713,7 +720,7 @@ newtype SQLULEN = SQLULEN Word64 deriving (Show, Eq, Storable)
 -- https://github.com/Microsoft/ODBC-Specification/blob/753d7e714b7eab9eaab4ad6105fdf4267d6ad6f6/Windows/inc/sqltypes.h#L60
 newtype SQLINTEGER = SQLINTEGER Int64 deriving (Show, Eq, Storable, Num)
 
--- https://github.com/nil/nil/blob/753d7e714b7eab9eaab4ad6105fdf4267d6ad6f6/Windows/inc/sqltypes.h#L61..L61
+-- https://github.com/Microsoft/ODBC-Specification/blob/753d7e714b7eab9eaab4ad6105fdf4267d6ad6f6/Windows/inc/sqltypes.h#L61..L61
 newtype SQLUINTEGER = SQLUINTEGER Word64 deriving (Show, Eq, Storable, Num, Integral, Enum, Ord, Real)
 
 -- https://github.com/Microsoft/ODBC-Specification/blob/753d7e714b7eab9eaab4ad6105fdf4267d6ad6f6/Windows/inc/sqltypes.h#L332
@@ -869,6 +876,7 @@ sql_type_date = 91
 
 -- MS Driver-specific type
 -- https://github.com/Microsoft/msphpsql/blob/master/source/shared/msodbcsql.h#L201
+-- https://docs.microsoft.com/en-us/sql/relational-databases/native-client-odbc-date-time/data-type-support-for-odbc-date-and-time-improvements
 sql_ss_time2 :: SQLSMALLINT
 sql_ss_time2 = -154
 
@@ -941,11 +949,11 @@ sql_c_double = coerce sql_double
 sql_c_long :: SQLCTYPE
 sql_c_long = coerce sql_integer
 
--- https://github.com/nil/nil/blob/753d7e714b7eab9eaab4ad6105fdf4267d6ad6f6/Windows/inc/sqlext.h#L592
+-- https://github.com/Microsoft/ODBC-Specification/blob/753d7e714b7eab9eaab4ad6105fdf4267d6ad6f6/Windows/inc/sqlext.h#L592
 sql_c_bigint :: SQLCTYPE
 sql_c_bigint = coerce (sql_bigint - 20)
 
--- https://github.com/nil/nil/blob/753d7e714b7eab9eaab4ad6105fdf4267d6ad6f6/Windows/inc/sqlext.h#L593
+-- https://github.com/Microsoft/ODBC-Specification/blob/753d7e714b7eab9eaab4ad6105fdf4267d6ad6f6/Windows/inc/sqlext.h#L593
 -- sql_c_biguint :: SQLCTYPE
 -- sql_c_biguint = coerce (sql_bigint - 22)
 
