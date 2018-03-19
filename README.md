@@ -48,3 +48,16 @@ I have tested the OS X instructions on my own machine.
 follows setup instructions for Linux, and
 [the AppVeyor file](https://github.com/chrisdone/odbc/blob/master/appveyor.yml)
 follows the setup instructions for Windows.
+
+There is a test program that comes with the package called `odbc`
+which accepts a connection string as its argument. You can use this to
+test your connection easily.
+
+    $ stack exec odbc 'DRIVER={ODBC Driver 13 for SQL Server};SERVER=192.168.99.101;Uid=SA;Pwd=Passw0rd;Encrypt=no'
+    > create table foo (i int)
+    Rows: 0
+    > insert into foo values (123123123)
+    Rows: 0
+    > select * from foo
+    123123123
+    Rows: 1
