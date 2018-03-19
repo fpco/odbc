@@ -12,7 +12,6 @@
 #include <sqlext.h>
 #include <sqltypes.h>
 #include <odbcss.h>
-#include "ms.h"
 
 #define FALSE 0
 #define TRUE 1
