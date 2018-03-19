@@ -1,3 +1,4 @@
+{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE DeriveGeneric #-}
 
@@ -6,34 +7,66 @@
 module Main where
 
 import           Control.Concurrent.Async
+import           Data.Text (Text)
 import qualified Data.Text as T
 import qualified Database.ODBC.Internal as Internal
+import qualified Database.ODBC.SQLServer as SQLServer
 import           System.Environment
 import           Weigh
 
 -- | Weigh maps.
 main :: IO ()
-main =
-  mainWith
-    (do setColumns [Case, Allocated, Max, Live, GCs]
-        sequence_
-          [ action
-            ("Connect/disconnect: " ++ show n ++ " times")
-            (runs
-               n
-               (do c <- connectWithString
-                   Internal.close c))
-          | n <- [1, 10, 20]
-          ]
-        sequence_
-          [ action
-            ("Connect/disconnect: " ++ show n ++ " n threads")
-            (replicateConcurrently
-               n
-               (do c <- connectWithString
-                   Internal.close c))
-          | n <- [1, 10, 20]
-          ])
+main = do
+  mlabels <- lookupEnv "ODBC_WEIGH_TESTS"
+  case mlabels of
+    Nothing ->
+      mainWith
+        (do setColumns [Case, Allocated, Max, Live, GCs]
+            (mapM_ snd tests))
+    Just labels ->
+      mainWith
+        (do setColumns [Case, Allocated, Max, Live, GCs]
+            (mapM_ snd (filter ((flip elem (words labels)) . fst) tests)))
+
+tests :: [(String, Weigh ())]
+tests = [("connection", connection)
+        ,("querying", querying)]
+
+querying :: Weigh ()
+querying =
+  sequence_
+    [ action
+      ("Query: " ++ show n ++ " times")
+      (runs
+         n
+         (do c <- connectWithString
+             _ <-
+               SQLServer.query c "SELECT 12345678, N'Hello, World!'" :: IO [( Int
+                                                                            , Text)]
+             Internal.close c))
+    | n <- [1, 10, 20]
+    ]
+
+connection :: Weigh ()
+connection = do
+  sequence_
+    [ action
+      ("Connect/disconnect: " ++ show n ++ " times")
+      (runs
+         n
+         (do c <- connectWithString
+             Internal.close c))
+    | n <- [1, 10, 20]
+    ]
+  sequence_
+    [ action
+      ("Connect/disconnect: " ++ show n ++ " n threads")
+      (replicateConcurrently
+         n
+         (do c <- connectWithString
+             Internal.close c))
+    | n <- [1, 10, 20]
+    ]
 
 -- | Run n times.
 runs :: Int -> IO () -> IO ()
