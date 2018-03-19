@@ -291,7 +291,7 @@ quickCheckOneway l typ =
            pure c)
        SQLServer.close)
     (it
-       ("QuickCheck roundtrip: HS=" <> l <> ", SQL=" <> typ)
+       ("QuickCheck one-way: HS=" <> l <> ", SQL=" <> typ)
        (\c ->
           property
             (\input ->

@@ -531,7 +531,7 @@ getData dbc stmt i col =
               getTypedData
                 dbc
                 stmt
-                sql_c_ss_time2
+                sql_c_time
                 i
                 (coerce datePtr)
                 (SQLLEN 12)
@@ -946,8 +946,8 @@ sql_wlongvarchar = (-10)
 -- sql_interval :: SQLSMALLINT
 -- sql_interval = 10
 
--- sql_time :: SQLSMALLINT
--- sql_time = 10
+sql_time :: SQLSMALLINT
+sql_time = 10
 
 -- sql_timestamp :: SQLSMALLINT
 -- sql_timestamp = 11
@@ -1015,15 +1015,8 @@ sql_c_bit = coerce sql_bit
 sql_c_date :: SQLCTYPE
 sql_c_date = coerce (9 :: SQLSMALLINT)
 
-sql_c_types_extended :: SQLCTYPE
-sql_c_types_extended = 0x04000
-
--- https://docs.microsoft.com/en-us/sql/relational-databases/native-client-odbc-date-time/data-type-support-for-odbc-date-and-time-improvements
-sql_c_ss_time2 :: SQLCTYPE
-sql_c_ss_time2 = (sql_c_types_extended + 0)
-
--- sql_c_ss_timestampoffset :: SQLCTYPE
--- sql_c_ss_timestampoffset = (sql_c_types_extended + 1)
-
 sql_c_type_timestamp :: SQLCTYPE
 sql_c_type_timestamp = coerce sql_type_timestamp
+
+sql_c_time :: SQLCTYPE
+sql_c_time = coerce sql_time
