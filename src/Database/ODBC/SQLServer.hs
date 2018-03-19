@@ -376,7 +376,7 @@ renderValue =
         ("'" % Formatting.dateDash % " " % Formatting.left 2 '0' % ":" %
          Formatting.left 2 '0' %
          ":" %
-         Formatting.fixed 7 %
+         Formatting.shortest %
          "'")
         d
         hh

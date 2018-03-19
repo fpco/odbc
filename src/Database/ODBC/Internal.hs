@@ -553,6 +553,42 @@ getData dbc stmt i col =
                     (fmap
                        (\frac -> fromIntegral frac / 1000000000)
                        (odbc_SQL_SS_TIME2_STRUCT_fraction datePtr)))))
+     | colType == sql_type_timestamp ->
+       withMallocBytes
+         16
+         (\timestampPtr -> do
+            mlen <-
+              getTypedData
+                dbc
+                stmt
+                sql_c_type_timestamp
+                i
+                (coerce timestampPtr)
+                (SQLLEN 16)
+            case mlen of
+              Nothing -> pure Nothing
+              Just {} ->
+                fmap
+                  (Just . LocalTimeValue)
+                  (LocalTime <$>
+                   (fromGregorian <$>
+                    (fmap fromIntegral (odbc_TIMESTAMP_STRUCT_year timestampPtr)) <*>
+                    (fmap
+                       fromIntegral
+                       (odbc_TIMESTAMP_STRUCT_month timestampPtr)) <*>
+                    (fmap fromIntegral (odbc_TIMESTAMP_STRUCT_day timestampPtr))) <*>
+                   (TimeOfDay <$>
+                    (fmap fromIntegral (odbc_TIMESTAMP_STRUCT_hour timestampPtr)) <*>
+                    (fmap
+                       fromIntegral
+                       (odbc_TIMESTAMP_STRUCT_minute timestampPtr)) <*>
+                    ((+) <$>
+                     (fmap
+                        fromIntegral
+                        (odbc_TIMESTAMP_STRUCT_second timestampPtr)) <*>
+                     (fmap
+                        (\frac -> fromIntegral frac / 1000000000)
+                        (odbc_TIMESTAMP_STRUCT_fraction timestampPtr))))))
      | otherwise ->
        throwIO
          (UnknownDataType
@@ -798,40 +834,39 @@ foreign import ccall "odbc odbc_SQLDescribeColW"
     -> IO RETCODE
 
 foreign import ccall "odbc DATE_STRUCT_year" odbc_DATE_STRUCT_year
-               :: Ptr DATE_STRUCT -> IO SQLSMALLINT
+ :: Ptr DATE_STRUCT -> IO SQLSMALLINT
 
 foreign import ccall "odbc DATE_STRUCT_month" odbc_DATE_STRUCT_month
-               :: Ptr DATE_STRUCT -> IO SQLUSMALLINT
+ :: Ptr DATE_STRUCT -> IO SQLUSMALLINT
 
 foreign import ccall "odbc DATE_STRUCT_day" odbc_DATE_STRUCT_day
-               :: Ptr DATE_STRUCT -> IO SQLUSMALLINT
+ :: Ptr DATE_STRUCT -> IO SQLUSMALLINT
 
 foreign import ccall "odbc SQL_SS_TIME2_STRUCT_hour" odbc_SQL_SS_TIME2_STRUCT_hour
-               :: Ptr SQL_SS_TIME2_STRUCT -> IO SQLUSMALLINT
+ :: Ptr SQL_SS_TIME2_STRUCT -> IO SQLUSMALLINT
 
 foreign import ccall "odbc SQL_SS_TIME2_STRUCT_minute" odbc_SQL_SS_TIME2_STRUCT_minute
-               :: Ptr SQL_SS_TIME2_STRUCT -> IO SQLUSMALLINT
+ :: Ptr SQL_SS_TIME2_STRUCT -> IO SQLUSMALLINT
 
 foreign import ccall "odbc SQL_SS_TIME2_STRUCT_second" odbc_SQL_SS_TIME2_STRUCT_second
-               :: Ptr SQL_SS_TIME2_STRUCT -> IO SQLUSMALLINT
+ :: Ptr SQL_SS_TIME2_STRUCT -> IO SQLUSMALLINT
 
 foreign import ccall "odbc SQL_SS_TIME2_STRUCT_fraction" odbc_SQL_SS_TIME2_STRUCT_fraction
-               :: Ptr SQL_SS_TIME2_STRUCT -> IO SQLUINTEGER
+ :: Ptr SQL_SS_TIME2_STRUCT -> IO SQLUINTEGER
 
-
-foreign import ccall "odbc TIMESTAMP_STRUCT_year  " odbc_TIMESTAMP_STRUCT_year
+foreign import ccall "odbc TIMESTAMP_STRUCT_year" odbc_TIMESTAMP_STRUCT_year
   :: Ptr TIMESTAMP_STRUCT -> IO SQLSMALLINT
-foreign import ccall "odbc TIMESTAMP_STRUCT_month  " odbc_TIMESTAMP_STRUCT_month
+foreign import ccall "odbc TIMESTAMP_STRUCT_month" odbc_TIMESTAMP_STRUCT_month
   :: Ptr TIMESTAMP_STRUCT -> IO SQLUSMALLINT
-foreign import ccall "odbc TIMESTAMP_STRUCT_day  " odbc_TIMESTAMP_STRUCT_day
+foreign import ccall "odbc TIMESTAMP_STRUCT_day" odbc_TIMESTAMP_STRUCT_day
   :: Ptr TIMESTAMP_STRUCT -> IO SQLUSMALLINT
-foreign import ccall "odbc TIMESTAMP_STRUCT_hour  " odbc_TIMESTAMP_STRUCT_hour
+foreign import ccall "odbc TIMESTAMP_STRUCT_hour" odbc_TIMESTAMP_STRUCT_hour
   :: Ptr TIMESTAMP_STRUCT -> IO SQLUSMALLINT
-foreign import ccall "odbc TIMESTAMP_STRUCT_minute  " odbc_TIMESTAMP_STRUCT_minute
+foreign import ccall "odbc TIMESTAMP_STRUCT_minute" odbc_TIMESTAMP_STRUCT_minute
   :: Ptr TIMESTAMP_STRUCT -> IO SQLUSMALLINT
-foreign import ccall "odbc TIMESTAMP_STRUCT_second  " odbc_TIMESTAMP_STRUCT_second
+foreign import ccall "odbc TIMESTAMP_STRUCT_second" odbc_TIMESTAMP_STRUCT_second
   :: Ptr TIMESTAMP_STRUCT -> IO SQLUSMALLINT
-foreign import ccall "odbc TIMESTAMP_STRUCT_fraction" odbc_TIMESTAMP_STRUCT_fracti
+foreign import ccall "odbc TIMESTAMP_STRUCT_fraction" odbc_TIMESTAMP_STRUCT_fraction
   :: Ptr TIMESTAMP_STRUCT -> IO SQLUINTEGER
 
 --------------------------------------------------------------------------------
@@ -1006,5 +1041,3 @@ sql_c_ss_time2 = (sql_c_types_extended + 0)
 
 sql_c_type_timestamp :: SQLCTYPE
 sql_c_type_timestamp = coerce sql_type_timestamp
-
-sql_c_type_time = 92

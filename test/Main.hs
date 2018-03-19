@@ -1,3 +1,4 @@
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE AllowAmbiguousTypes #-}
@@ -73,6 +74,7 @@ conversionTo = do
         roundtrip @Word8 "minBound(Word8)" "Word8" "tinyint" minBound)
   quickCheckRoundtrip @Day "Day" "date"
   quickCheckRoundtrip @LocalTime "LocalTime" "datetime2"
+  quickCheckRoundtrip @TestDateTime "TestDateTime" "datetime"
   quickCheckRoundtrip @TimeOfDay "TimeOfDay" "time"
   quickCheckRoundtrip @Float "Float" "real"
   quickCheckRoundtrip @Double "Double" "float"
@@ -395,3 +397,18 @@ instance Arbitrary TimeOfDay where
 
 instance Arbitrary LocalTime where
   arbitrary = LocalTime <$> arbitrary <*> arbitrary
+
+newtype TestDateTime = TestDateTime LocalTime
+  deriving (Eq, Ord, Show, SQLServer.ToSql, FromValue)
+
+instance Arbitrary TestDateTime where
+  arbitrary = fmap TestDateTime (LocalTime <$> arbitrary <*> arbitraryLimited)
+    where
+      arbitraryLimited = do
+        fractional <- elements [993, 003, 497, 007, 000, 127] :: Gen Integer
+        -- 	Rounded to increments of .000, .003, or .007 seconds
+        -- from: https://docs.microsoft.com/en-us/sql/t-sql/data-types/datetime-transact-sql
+        seconds <- choose (0, 86400)
+        pure
+          (timeToTimeOfDay
+             (secondsToDiffTime seconds + (fromRational (fractional % 1000))))
