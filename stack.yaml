@@ -3,3 +3,4 @@ packages:
 - .
 extra-deps:
 - formatting-6.3.1
+- weigh-0.0.7
