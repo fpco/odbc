@@ -75,7 +75,8 @@ conversionTo = do
   quickCheckRoundtrip @Day "Day" "date"
   quickCheckRoundtrip @LocalTime "LocalTime" "datetime2"
   quickCheckRoundtrip @TestDateTime "TestDateTime" "datetime"
-  quickCheckRoundtrip @TimeOfDay "TimeOfDay" "time"
+  quickCheckOneway @TimeOfDay "TimeOfDay" "time"
+  quickCheckRoundtrip @TestTimeOfDay "TimeOfDay" "time"
   quickCheckRoundtrip @Float "Float" "real"
   quickCheckRoundtrip @Double "Double" "float"
   quickCheckRoundtrip @Double "Float" "float"
@@ -276,6 +277,43 @@ quickCheckRoundtrip l typ =
                              ]))
                      assert (result == input)))))
 
+quickCheckOneway ::
+     forall t. (Arbitrary t, Eq t, Show t, ToSql t, FromValue t)
+  => String
+  -> String
+  -> Spec
+quickCheckOneway l typ =
+  around
+    (bracket
+       (do c <- connectWithString
+           SQLServer.exec c "DROP TABLE IF EXISTS test"
+           SQLServer.exec c ("CREATE TABLE test (f " <> fromString typ <> ")")
+           pure c)
+       SQLServer.close)
+    (it
+       ("QuickCheck roundtrip: HS=" <> l <> ", SQL=" <> typ)
+       (\c ->
+          property
+            (\input ->
+               monadicIO
+                 (do let q =
+                           "INSERT INTO test VALUES (" <> toSql (input :: t) <>
+                           ")"
+                     liftIO
+                       (onException
+                          (SQLServer.exec c q)
+                          ((T.putStrLn (SQLServer.renderQuery q))))
+                     [Identity result] <- SQLServer.query c "SELECT f FROM test"
+                     monitor
+                       (counterexample
+                          (unlines
+                             [ "Expected: " ++ show input
+                             , "Actual: " ++ show (result :: t)
+                             , "Query was: " ++
+                               T.unpack (SQLServer.renderQuery q)
+                             ]))
+                     assert True))))
+
 quickCheckInternalRoundtrip ::
      forall t. (Eq t, Show t, Arbitrary t)
   => Text
@@ -393,10 +431,25 @@ instance Arbitrary TimeOfDay where
          (secondsToDiffTime seconds + (fromRational (fractional % 10000000))))
 
 instance Arbitrary LocalTime where
-  arbitrary = LocalTime <$> arbitrary <*> arbitrary
+  arbitrary = LocalTime <$> arbitrary <*> arbitraryLimited
+    where
+      arbitraryLimited = do
+        fractional <- choose (0, 9999999) :: Gen Integer
+        seconds <- choose (0, 86400)
+        pure
+          (timeToTimeOfDay
+             (secondsToDiffTime seconds + (fromRational (fractional % 10000000))))
 
 newtype TestDateTime = TestDateTime LocalTime
   deriving (Eq, Ord, Show, SQLServer.ToSql, FromValue)
+
+newtype TestTimeOfDay = TestTimeOfDay TimeOfDay
+  deriving (Eq, Ord, Show, SQLServer.ToSql, FromValue)
+
+instance Arbitrary TestTimeOfDay where
+  arbitrary = do
+    seconds <- choose (0, 86400)
+    pure (TestTimeOfDay (timeToTimeOfDay (secondsToDiffTime seconds)))
 
 instance Arbitrary TestDateTime where
   arbitrary = fmap TestDateTime (LocalTime <$> arbitrary <*> arbitraryLimited)

@@ -58,3 +58,5 @@ repl c = do
             ODBC.IntValue i -> show i
             ODBC.DayValue d -> show d
             ODBC.ByteValue b -> show b
+            ODBC.TimeOfDayValue v -> show v
+            ODBC.LocalTimeValue v -> show v
