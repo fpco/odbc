@@ -38,6 +38,8 @@ module Database.ODBC.SQLServer
     -- $exceptions
 
   , Internal.ODBCException(..)
+
+   -- * Debugging
   , renderQuery
   ) where
 
@@ -300,12 +302,11 @@ instance ToSql Day where
 instance ToSql TimeOfDay where
   toSql = toSql . TimeOfDayValue
 
--- | Corresponds to DATETIME2 type of SQL Server.
+-- | Corresponds to DATETIME/DATETIME2 type of SQL Server.
 --
--- The 'LocalTime' type has more accuracy than the @datetime@ type can
--- hold; so you will get a query error if you try to do so. Solution:
--- use @datetime2@, which is recommended practice in SQL Server:
--- <https://docs.microsoft.com/en-us/sql/t-sql/data-types/datetime-transact-sql>
+-- The 'LocalTime' type has more accuracy than the @datetime@ type and
+-- the @datetime2@ types can hold; so you will lose precision when you
+-- insert.
 instance ToSql LocalTime where
   toSql = toSql . LocalTimeValue
 
@@ -329,6 +330,7 @@ query c (Query ps) = do
     Right rows' -> pure rows'
     Left e -> liftIO (throwIO (Internal.DataRetrievalError e))
 
+-- | Render a query to a plain text SQL query. Useful for debugging.
 renderQuery :: Query -> Text
 renderQuery (Query ps) = (renderParts (toList ps))
 
@@ -411,6 +413,8 @@ renderValue =
         mm
         (renderFractional ss)
 
+-- | Obviously, this is not fast. But it is correct. A faster version
+-- can be written later.
 renderFractional :: Pico -> String
 renderFractional x = trim (printf "%.7f" (realToFrac x :: Double) :: String)
   where

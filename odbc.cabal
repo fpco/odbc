@@ -1,6 +1,8 @@
 name:                odbc
-synopsis:            Haskell binding to the ODBC API
-description:         Haskell binding to the ODBC API.
+synopsis:            Haskell binding to the ODBC API, aimed at SQL Server driver
+description: Haskell binding to the ODBC API. This has been tested
+             against the Microsoft SQL Server ODBC drivers. Its test
+             suite runs on OS X, Windows and Linux.
 version:             0.0.1
 license:             BSD3
 license-file:        LICENSE

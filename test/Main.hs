@@ -232,12 +232,9 @@ roundtrip why l typ input =
     ("Roundtrip " <> why <> ": HS=" <> l <> ", SQL=" <> typ)
     (do c <- connectWithString
         SQLServer.exec c "DROP TABLE IF EXISTS test"
-        --liftIO (T.putStrLn (SQLServer.renderQuery (("CREATE TABLE test (f " <> fromString typ <> ")"))))
         SQLServer.exec c ("CREATE TABLE test (f " <> fromString typ <> ")")
         let q = "INSERT INTO test VALUES (" <> toSql (input) <> ")"
-        -- liftIO (T.putStrLn (SQLServer.renderQuery q))
         SQLServer.exec c q
-        --liftIO (putStrLn "ook")
         [Identity (!result)] <- SQLServer.query c "SELECT * FROM test"
         SQLServer.close c
         shouldBe result input)

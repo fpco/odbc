@@ -21,25 +21,18 @@
 -- Don't use this module if you don't know what you're doing.
 
 module Database.ODBC.Internal
-  ( -- * Connect/disconnect
-    connect
+    -- * Connect/disconnect
+  ( connect
   , close
   , Connection
-
     -- * Executing queries
   , exec
   , query
   , Value(..)
-
     -- * Streaming results
-    -- $streaming
-
   , stream
   , Step(..)
-
     -- * Exceptions
-    -- $exceptions
-
   , ODBCException(..)
   ) where
 
