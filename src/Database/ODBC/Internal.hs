@@ -121,6 +121,7 @@ data Value
   | DayValue !Day
     -- ^ Date (year, month, day) values.
   | TimeOfDayValue !TimeOfDay
+    -- ^ Time of day (hh, mm, ss + fractional) values.
   deriving (Eq, Show, Typeable, Ord, Generic, Data)
 instance NFData Value
 
