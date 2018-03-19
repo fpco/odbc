@@ -119,7 +119,7 @@ instance FromValue TimeOfDay where
     withNonNull
       (\case
          TimeOfDayValue x -> pure (id x)
-         v -> Left ("Expected Day, but got: " ++ show v))
+         v -> Left ("Expected TimeOfDay, but got: " ++ show v))
 
 
 --------------------------------------------------------------------------------
