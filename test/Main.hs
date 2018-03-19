@@ -18,6 +18,8 @@ import           Control.Exception (try, bracket, onException, SomeException)
 import           Control.Monad
 import           Control.Monad.IO.Class
 import           Data.ByteString (ByteString)
+import           Data.ByteString (ByteString)
+import qualified Data.ByteString as S
 import qualified Data.ByteString.Char8 as S8
 import           Data.Char
 import           Data.Functor.Identity
@@ -52,10 +54,18 @@ spec = do
   describe
     "Database.ODBC.Internal"
     (do describe "Connectivity" connectivity
-        describe "Data retrieval" dataRetrieval)
+        describe "Data retrieval" dataRetrieval
+        describe "Big data" bigData)
   describe
     "Database.ODBC.SQLServer"
     (describe "Conversion to SQL" conversionTo)
+
+-- | Test fields with large data like megabytes of text. Just to check
+-- we don't have some kind of hard limit problem.
+bigData :: Spec
+bigData = do
+  roundtrip @Text "2MB text" "Text" "ntext" (T.replicate (1024*1024*2) "A")
+  roundtrip @ByteString "2MB binary" "ByteString" "text" (S.replicate (1024*1024*2) 97)
 
 conversionTo :: Spec
 conversionTo = do
