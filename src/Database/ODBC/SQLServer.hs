@@ -277,6 +277,10 @@ instance ToSql Day where
 instance ToSql TimeOfDay where
   toSql = toSql . TimeOfDayValue
 
+-- | Corresponds to LOCALTIME type of SQL Server.
+instance ToSql LocalTime where
+  toSql = toSql . LocalTimeValue
+
 --------------------------------------------------------------------------------
 -- Top-level functions
 
@@ -361,8 +365,23 @@ renderValue =
     DayValue d -> Formatting.sformat ("'" % Formatting.dateDash % "'") d
     TimeOfDayValue (TimeOfDay hh mm ss) ->
       Formatting.sformat
-        ("'" % Formatting.left 2 '0' % ":" % Formatting.left 2 '0' % ":" % Formatting.fixed 7 % "'")
-        hh mm ss
+        ("'" % Formatting.left 2 '0' % ":" % Formatting.left 2 '0' % ":" %
+         Formatting.fixed 7 %
+         "'")
+        hh
+        mm
+        ss
+    LocalTimeValue (LocalTime d (TimeOfDay hh mm ss)) ->
+      Formatting.sformat
+        ("'" % Formatting.dateDash % " " % Formatting.left 2 '0' % ":" %
+         Formatting.left 2 '0' %
+         ":" %
+         Formatting.fixed 7 %
+         "'")
+        d
+        hh
+        mm
+        ss
 
 -- | A very conservative character escape.
 escapeChar8 :: Word8 -> Text

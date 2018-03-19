@@ -12,7 +12,7 @@
 #include <sqlext.h>
 #include <sqltypes.h>
 #include <odbcss.h>
-#include "msodbcsql.h"
+#include "ms.h"
 
 #define FALSE 0
 #define TRUE 1
@@ -263,6 +263,9 @@ SQLUSMALLINT DATE_STRUCT_day(DATE_STRUCT *d){
 ////////////////////////////////////////////////////////////////////////////////
 // Accessors for SQL_SS_TIME2_STRUCT
 
+// Comes from:
+// https://docs.microsoft.com/en-us/sql/relational-databases/native-client-odbc-date-time/data-type-support-for-odbc-date-and-time-improvements
+
 SQLUSMALLINT SQL_SS_TIME2_STRUCT_hour(SQL_SS_TIME2_STRUCT *t){
   return t->hour;
 }
@@ -273,5 +276,30 @@ SQLUSMALLINT SQL_SS_TIME2_STRUCT_second(SQL_SS_TIME2_STRUCT *t){
   return t->second;
 }
 SQLUINTEGER SQL_SS_TIME2_STRUCT_fraction(SQL_SS_TIME2_STRUCT *t){
+  return t->fraction;
+}
+
+////////////////////////////////////////////////////////////////////////////////
+// Accessors for TIMESTAMP_STRUCT
+
+SQLSMALLINT TIMESTAMP_STRUCT_year(TIMESTAMP_STRUCT *t){
+  return t->year;
+}
+SQLUSMALLINT TIMESTAMP_STRUCT_month(TIMESTAMP_STRUCT *t){
+  return t->month;
+}
+SQLUSMALLINT TIMESTAMP_STRUCT_day(TIMESTAMP_STRUCT *t){
+  return t->day;
+}
+SQLUSMALLINT TIMESTAMP_STRUCT_hour(TIMESTAMP_STRUCT *t){
+  return t->hour;
+}
+SQLUSMALLINT TIMESTAMP_STRUCT_minute(TIMESTAMP_STRUCT *t){
+  return t->minute;
+}
+SQLUSMALLINT TIMESTAMP_STRUCT_second(TIMESTAMP_STRUCT *t){
+  return t->second;
+}
+SQLUINTEGER TIMESTAMP_STRUCT_fraction(TIMESTAMP_STRUCT *t){
   return t->fraction;
 }

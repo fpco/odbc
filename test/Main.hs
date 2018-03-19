@@ -72,6 +72,7 @@ conversionTo = do
         roundtrip @Int "minBound(Int16)" "Int" "smallint" (fromIntegral (minBound :: Int16))
         roundtrip @Word8 "minBound(Word8)" "Word8" "tinyint" minBound)
   quickCheckRoundtrip @Day "Day" "date"
+  quickCheckRoundtrip @LocalTime "LocalTime" "datetime2"
   quickCheckRoundtrip @TimeOfDay "TimeOfDay" "time"
   quickCheckRoundtrip @Float "Float" "real"
   quickCheckRoundtrip @Double "Double" "float"
@@ -391,3 +392,6 @@ instance Arbitrary TimeOfDay where
     pure
       (timeToTimeOfDay
          (secondsToDiffTime seconds + (fromRational (fractional % 10000000))))
+
+instance Arbitrary LocalTime where
+  arbitrary = LocalTime <$> arbitrary <*> arbitrary

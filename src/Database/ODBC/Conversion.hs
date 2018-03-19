@@ -121,6 +121,12 @@ instance FromValue TimeOfDay where
          TimeOfDayValue x -> pure (id x)
          v -> Left ("Expected TimeOfDay, but got: " ++ show v))
 
+instance FromValue LocalTime where
+  fromValue =
+    withNonNull
+      (\case
+         LocalTimeValue x -> pure (id x)
+         v -> Left ("Expected LocalTime, but got: " ++ show v))
 
 --------------------------------------------------------------------------------
 -- Producing rows
@@ -173,6 +179,10 @@ instance FromRow Day where
   fromRow _ = Left "Unexpected number of fields in row"
 
 instance FromRow TimeOfDay where
+  fromRow [v] = fromValue v
+  fromRow _ = Left "Unexpected number of fields in row"
+
+instance FromRow LocalTime where
   fromRow [v] = fromValue v
   fromRow _ = Left "Unexpected number of fields in row"
 

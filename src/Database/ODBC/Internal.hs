@@ -122,6 +122,8 @@ data Value
     -- ^ Date (year, month, day) values.
   | TimeOfDayValue !TimeOfDay
     -- ^ Time of day (hh, mm, ss + fractional) values.
+  | LocalTimeValue !LocalTime
+    -- ^ Local date and time.
   deriving (Eq, Show, Typeable, Ord, Generic, Data)
 instance NFData Value
 
@@ -526,7 +528,7 @@ getData dbc stmt i col =
                    (fmap fromIntegral (odbc_DATE_STRUCT_month datePtr)) <*>
                    (fmap fromIntegral (odbc_DATE_STRUCT_day datePtr))))
      | colType == sql_ss_time2 ->
-       withMallocBytes
+       withCallocBytes
          12 -- This struct is padded to 12 bytes on both 32-bit and 64-bit operating systems.
             -- https://docs.microsoft.com/en-us/sql/relational-databases/native-client-odbc-date-time/data-type-support-for-odbc-date-and-time-improvements
          (\datePtr -> do
@@ -732,6 +734,9 @@ data DATE_STRUCT
 -- https://docs.microsoft.com/en-us/sql/relational-databases/native-client-odbc-date-time/data-type-support-for-odbc-date-and-time-improvements
 data SQL_SS_TIME2_STRUCT
 
+-- https://docs.microsoft.com/en-us/sql/odbc/reference/appendixes/c-data-types
+data TIMESTAMP_STRUCT
+
 --------------------------------------------------------------------------------
 -- Foreign functions
 
@@ -813,6 +818,22 @@ foreign import ccall "odbc SQL_SS_TIME2_STRUCT_second" odbc_SQL_SS_TIME2_STRUCT_
 foreign import ccall "odbc SQL_SS_TIME2_STRUCT_fraction" odbc_SQL_SS_TIME2_STRUCT_fraction
                :: Ptr SQL_SS_TIME2_STRUCT -> IO SQLUINTEGER
 
+
+foreign import ccall "odbc TIMESTAMP_STRUCT_year  " odbc_TIMESTAMP_STRUCT_year
+  :: Ptr TIMESTAMP_STRUCT -> IO SQLSMALLINT
+foreign import ccall "odbc TIMESTAMP_STRUCT_month  " odbc_TIMESTAMP_STRUCT_month
+  :: Ptr TIMESTAMP_STRUCT -> IO SQLUSMALLINT
+foreign import ccall "odbc TIMESTAMP_STRUCT_day  " odbc_TIMESTAMP_STRUCT_day
+  :: Ptr TIMESTAMP_STRUCT -> IO SQLUSMALLINT
+foreign import ccall "odbc TIMESTAMP_STRUCT_hour  " odbc_TIMESTAMP_STRUCT_hour
+  :: Ptr TIMESTAMP_STRUCT -> IO SQLUSMALLINT
+foreign import ccall "odbc TIMESTAMP_STRUCT_minute  " odbc_TIMESTAMP_STRUCT_minute
+  :: Ptr TIMESTAMP_STRUCT -> IO SQLUSMALLINT
+foreign import ccall "odbc TIMESTAMP_STRUCT_second  " odbc_TIMESTAMP_STRUCT_second
+  :: Ptr TIMESTAMP_STRUCT -> IO SQLUSMALLINT
+foreign import ccall "odbc TIMESTAMP_STRUCT_fraction" odbc_TIMESTAMP_STRUCT_fracti
+  :: Ptr TIMESTAMP_STRUCT -> IO SQLUINTEGER
+
 --------------------------------------------------------------------------------
 -- Foreign utils
 
@@ -821,6 +842,9 @@ withMalloc m = bracket malloc free m
 
 withMallocBytes :: Int -> (Ptr a -> IO b) -> IO b
 withMallocBytes n m = bracket (mallocBytes n) free m
+
+withCallocBytes :: Int -> (Ptr a -> IO b) -> IO b
+withCallocBytes n m = bracket (callocBytes n) free m
 
 --------------------------------------------------------------------------------
 -- SQL constants
@@ -907,6 +931,10 @@ sql_wlongvarchar = (-10)
 -- sql_timestamp :: SQLSMALLINT
 -- sql_timestamp = 11
 
+-- https://github.com/Microsoft/ODBC-Specification/blob/753d7e714b7eab9eaab4ad6105fdf4267d6ad6f6/Windows/inc/sql.h#L225..L225
+sql_type_timestamp :: SQLSMALLINT
+sql_type_timestamp =  93
+
 sql_longvarchar :: SQLSMALLINT
 sql_longvarchar = (-1)
 
@@ -969,8 +997,14 @@ sql_c_date = coerce (9 :: SQLSMALLINT)
 sql_c_types_extended :: SQLCTYPE
 sql_c_types_extended = 0x04000
 
+-- https://docs.microsoft.com/en-us/sql/relational-databases/native-client-odbc-date-time/data-type-support-for-odbc-date-and-time-improvements
 sql_c_ss_time2 :: SQLCTYPE
 sql_c_ss_time2 = (sql_c_types_extended + 0)
 
 -- sql_c_ss_timestampoffset :: SQLCTYPE
 -- sql_c_ss_timestampoffset = (sql_c_types_extended + 1)
+
+sql_c_type_timestamp :: SQLCTYPE
+sql_c_type_timestamp = coerce sql_type_timestamp
+
+sql_c_type_time = 92
