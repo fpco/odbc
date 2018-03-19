@@ -120,6 +120,7 @@ data Value
     -- ^ Values that fit in one byte.
   | DayValue !Day
     -- ^ Date (year, month, day) values.
+  | TimeOfDayValue !TimeOfDay
   deriving (Eq, Show, Typeable, Ord, Generic, Data)
 instance NFData Value
 
@@ -523,6 +524,25 @@ getData dbc stmt i col =
                    (fmap fromIntegral (odbc_DATE_STRUCT_year datePtr)) <*>
                    (fmap fromIntegral (odbc_DATE_STRUCT_month datePtr)) <*>
                    (fmap fromIntegral (odbc_DATE_STRUCT_day datePtr))))
+     | colType == sql_ss_time2 ->
+       withMallocBytes
+         3
+         (\datePtr -> do
+            mlen <-
+              getTypedData dbc stmt sql_c_ss_time2 i (coerce datePtr) (SQLLEN 3)
+            case mlen of
+              Nothing -> pure Nothing
+              Just {} ->
+                fmap
+                  (Just . TimeOfDayValue)
+                  (TimeOfDay <$>
+                   (fmap fromIntegral (odbc_SQL_SS_TIME2_STRUCT_hour datePtr)) <*>
+                   (fmap fromIntegral (odbc_SQL_SS_TIME2_STRUCT_minute datePtr)) <*>
+                   ((+) <$>
+                    (fmap fromIntegral (odbc_SQL_SS_TIME2_STRUCT_second datePtr)) <*>
+                    (fmap
+                       (\frac -> fromIntegral frac / 1000000000)
+                       (odbc_SQL_SS_TIME2_STRUCT_fraction datePtr)))))
      | otherwise ->
        throwIO
          (UnknownDataType
@@ -665,7 +685,7 @@ newtype SQLPOINTER = SQLPOINTER (Ptr SQLPOINTER)
 -- | A type that maps to https://docs.microsoft.com/en-us/sql/odbc/reference/appendixes/c-data-types
 newtype SQLCTYPE =
   SQLCTYPE Int16
-  deriving (Show, Eq, Storable)
+  deriving (Show, Eq, Storable, Integral, Enum, Real, Num, Ord)
 
 -- https://github.com/Microsoft/ODBC-Specification/blob/753d7e714b7eab9eaab4ad6105fdf4267d6ad6f6/Windows/inc/sqltypes.h#L152
 newtype RETCODE = RETCODE Int16
@@ -692,10 +712,17 @@ newtype SQLULEN = SQLULEN Word64 deriving (Show, Eq, Storable)
 -- https://github.com/Microsoft/ODBC-Specification/blob/753d7e714b7eab9eaab4ad6105fdf4267d6ad6f6/Windows/inc/sqltypes.h#L60
 newtype SQLINTEGER = SQLINTEGER Int64 deriving (Show, Eq, Storable, Num)
 
+-- https://github.com/nil/nil/blob/753d7e714b7eab9eaab4ad6105fdf4267d6ad6f6/Windows/inc/sqltypes.h#L61..L61
+newtype SQLUINTEGER = SQLUINTEGER Word64 deriving (Show, Eq, Storable, Num, Integral, Enum, Ord, Real)
+
 -- https://github.com/Microsoft/ODBC-Specification/blob/753d7e714b7eab9eaab4ad6105fdf4267d6ad6f6/Windows/inc/sqltypes.h#L332
 newtype SQLWCHAR = SQLWCHAR CWString deriving (Show, Eq, Storable)
 
+-- https://docs.microsoft.com/en-us/sql/odbc/reference/appendixes/c-data-types
 data DATE_STRUCT
+
+-- https://docs.microsoft.com/en-us/sql/relational-databases/native-client-odbc-date-time/data-type-support-for-odbc-date-and-time-improvements
+data SQL_SS_TIME2_STRUCT
 
 --------------------------------------------------------------------------------
 -- Foreign functions
@@ -766,6 +793,18 @@ foreign import ccall "odbc DATE_STRUCT_month" odbc_DATE_STRUCT_month
 foreign import ccall "odbc DATE_STRUCT_day" odbc_DATE_STRUCT_day
                :: Ptr DATE_STRUCT -> IO SQLUSMALLINT
 
+foreign import ccall "odbc SQL_SS_TIME2_STRUCT_hour" odbc_SQL_SS_TIME2_STRUCT_hour
+               :: Ptr SQL_SS_TIME2_STRUCT -> IO SQLUSMALLINT
+
+foreign import ccall "odbc SQL_SS_TIME2_STRUCT_minute" odbc_SQL_SS_TIME2_STRUCT_minute
+               :: Ptr SQL_SS_TIME2_STRUCT -> IO SQLUSMALLINT
+
+foreign import ccall "odbc SQL_SS_TIME2_STRUCT_second" odbc_SQL_SS_TIME2_STRUCT_second
+               :: Ptr SQL_SS_TIME2_STRUCT -> IO SQLUSMALLINT
+
+foreign import ccall "odbc SQL_SS_TIME2_STRUCT_fraction" odbc_SQL_SS_TIME2_STRUCT_fraction
+               :: Ptr SQL_SS_TIME2_STRUCT -> IO SQLUINTEGER
+
 --------------------------------------------------------------------------------
 -- Foreign utils
 
@@ -826,6 +865,11 @@ sql_double = 8
 
 sql_type_date :: SQLSMALLINT
 sql_type_date = 91
+
+-- MS Driver-specific type
+-- https://github.com/Microsoft/msphpsql/blob/master/source/shared/msodbcsql.h#L201
+sql_ss_time2 :: SQLSMALLINT
+sql_ss_time2 = -154
 
 -- sql_datetime :: SQLSMALLINT
 -- sql_datetime = 9
@@ -912,3 +956,12 @@ sql_c_bit = coerce sql_bit
 
 sql_c_date :: SQLCTYPE
 sql_c_date = coerce (9 :: SQLSMALLINT)
+
+sql_c_types_extended :: SQLCTYPE
+sql_c_types_extended = 0x04000
+
+sql_c_ss_time2 :: SQLCTYPE
+sql_c_ss_time2 = (sql_c_types_extended + 0)
+
+-- sql_c_ss_timestampoffset :: SQLCTYPE
+-- sql_c_ss_timestampoffset = (sql_c_types_extended + 1)

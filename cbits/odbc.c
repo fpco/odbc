@@ -12,6 +12,7 @@
 #include <sqlext.h>
 #include <sqltypes.h>
 #include <odbcss.h>
+#include "msodbcsql.h"
 
 #define FALSE 0
 #define TRUE 1
@@ -246,6 +247,9 @@ void odbc_ProcessLogMessages(EnvAndDbc *envAndDbc, SQLSMALLINT plm_handle_type, 
   }
 }
 
+////////////////////////////////////////////////////////////////////////////////
+// Accessors for DATE_STRUCT
+
 SQLSMALLINT DATE_STRUCT_year(DATE_STRUCT *d){
   return d->year;
 }
@@ -254,4 +258,20 @@ SQLUSMALLINT DATE_STRUCT_month(DATE_STRUCT *d){
 }
 SQLUSMALLINT DATE_STRUCT_day(DATE_STRUCT *d){
   return d->day;
+}
+
+////////////////////////////////////////////////////////////////////////////////
+// Accessors for SQL_SS_TIME2_STRUCT
+
+SQLUSMALLINT SQL_SS_TIME2_STRUCT_hour(SQL_SS_TIME2_STRUCT *t){
+  return t->hour;
+}
+SQLUSMALLINT SQL_SS_TIME2_STRUCT_minute(SQL_SS_TIME2_STRUCT *t){
+  return t->minute;
+}
+SQLUSMALLINT SQL_SS_TIME2_STRUCT_second(SQL_SS_TIME2_STRUCT *t){
+  return t->second;
+}
+SQLUINTEGER SQL_SS_TIME2_STRUCT_fraction(SQL_SS_TIME2_STRUCT *t){
+  return t->fraction;
 }

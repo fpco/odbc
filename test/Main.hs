@@ -22,9 +22,11 @@ import           Data.Char
 import           Data.Functor.Identity
 import           Data.Int
 import           Data.Monoid
+import           Data.Ratio
 import           Data.String
 import           Data.Text (Text)
 import qualified Data.Text as T
+import qualified Data.Text.IO as T
 import           Data.Time
 import           Data.Word
 import           Database.ODBC.Conversion (FromValue(..))
@@ -70,6 +72,7 @@ conversionTo = do
         roundtrip @Int "minBound(Int16)" "Int" "smallint" (fromIntegral (minBound :: Int16))
         roundtrip @Word8 "minBound(Word8)" "Word8" "tinyint" minBound)
   quickCheckRoundtrip @Day "Day" "date"
+  quickCheckRoundtrip @TimeOfDay "TimeOfDay" "time"
   quickCheckRoundtrip @Float "Float" "real"
   quickCheckRoundtrip @Double "Double" "float"
   quickCheckRoundtrip @Double "Float" "float"
@@ -250,20 +253,26 @@ quickCheckRoundtrip l typ =
            pure c)
        SQLServer.close)
     (it
-       ("QuickCheck roundtrip: HS=" <> l <> ", SQL="  <> typ)
+       ("QuickCheck roundtrip: HS=" <> l <> ", SQL=" <> typ)
        (\c ->
           property
             (\input ->
                monadicIO
-                 (do let q = "INSERT INTO test VALUES (" <> toSql (input :: t) <> ")"
-                     SQLServer.exec c q
-                     [Identity result] <- SQLServer.query c "SELECT * FROM test"
+                 (do let q =
+                           "INSERT INTO test VALUES (" <> toSql (input :: t) <>
+                           ")"
+                     liftIO
+                       (onException
+                          (SQLServer.exec c q)
+                          ((T.putStrLn (SQLServer.renderQuery q))))
+                     [Identity result] <- SQLServer.query c "SELECT f FROM test"
                      monitor
                        (counterexample
                           (unlines
                              [ "Expected: " ++ show input
                              , "Actual: " ++ show result
-                             , "Query was: " ++ show q
+                             , "Query was: " ++
+                               T.unpack (SQLServer.renderQuery q)
                              ]))
                      assert (result == input)))))
 
@@ -374,3 +383,11 @@ instance Arbitrary Day where
   arbitrary = do
     offset <- choose (0, 30000)
     pure (addDays offset (fromGregorian 1753 01 01))
+
+instance Arbitrary TimeOfDay where
+  arbitrary = do
+    fractional <- choose (0, 9999999) :: Gen Integer
+    seconds <- choose (0, 86400)
+    pure
+      (timeToTimeOfDay
+         (secondsToDiffTime seconds + (fromRational (fractional % 10000000))))
