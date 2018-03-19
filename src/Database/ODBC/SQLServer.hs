@@ -51,7 +51,9 @@ import qualified Data.ByteString as S
 import qualified Data.ByteString.Lazy as L
 import           Data.Char
 import           Data.Data
+import           Data.Fixed
 import           Data.Foldable
+import           Data.Int
 import           Data.Monoid
 import           Data.Sequence (Seq)
 import qualified Data.Sequence as Seq
@@ -68,6 +70,7 @@ import qualified Formatting
 import           Formatting ((%))
 import           Formatting.Time as Formatting
 import           GHC.Generics
+import           Text.Printf
 
 -- $building
 --
@@ -226,6 +229,15 @@ instance IsString Part where
 -- | Handy class for converting values to a query safely.
 --
 -- For example: @query c (\"SELECT * FROM demo WHERE id > \" <> toSql 123)@
+--
+-- WARNING: Note that if you insert a value like an 'Int' (64-bit)
+-- into a column that is @int@ (32-bit), then be sure that your number
+-- fits inside an @int@. Try using an 'Int32' instead to be
+-- sure.
+
+-- Below next to each instance you can read which Haskell types
+-- corresponds to which SQL Server type.
+--
 class ToSql a where
   toSql :: a -> Query
 
@@ -257,13 +269,21 @@ instance ToSql Bool where
 instance ToSql Double where
   toSql = toSql . DoubleValue
 
--- | Corresponds to FLOAT type of SQL Server.
+-- | Corresponds to REAL type of SQL Server.
 instance ToSql Float where
   toSql = toSql . FloatValue
 
 -- | Corresponds to BIGINT type of SQL Server.
 instance ToSql Int where
   toSql = toSql . IntValue
+
+-- | Corresponds to SMALLINT type of SQL Server.
+instance ToSql Int16 where
+  toSql = toSql . IntValue . fromIntegral
+
+-- | Corresponds to INT type of SQL Server.
+instance ToSql Int32 where
+  toSql = toSql . IntValue . fromIntegral
 
 -- | Corresponds to TINYINT type of SQL Server.
 instance ToSql Word8 where
@@ -274,10 +294,18 @@ instance ToSql Day where
   toSql = toSql . DayValue
 
 -- | Corresponds to TIME type of SQL Server.
+--
+-- 'TimeOfDay' supports more precision than the @time@ type of SQL
+-- server, so you will lose precision and not get back what you inserted.
 instance ToSql TimeOfDay where
   toSql = toSql . TimeOfDayValue
 
--- | Corresponds to LOCALTIME type of SQL Server.
+-- | Corresponds to DATETIME2 type of SQL Server.
+--
+-- The 'LocalTime' type has more accuracy than the @datetime@ type can
+-- hold; so you will get a query error if you try to do so. Solution:
+-- use @datetime2@, which is recommended practice in SQL Server:
+-- <https://docs.microsoft.com/en-us/sql/t-sql/data-types/datetime-transact-sql>
 instance ToSql LocalTime where
   toSql = toSql . LocalTimeValue
 
@@ -366,22 +394,30 @@ renderValue =
     TimeOfDayValue (TimeOfDay hh mm ss) ->
       Formatting.sformat
         ("'" % Formatting.left 2 '0' % ":" % Formatting.left 2 '0' % ":" %
-         Formatting.fixed 7 %
+         Formatting.string %
          "'")
         hh
         mm
-        ss
+        (renderFractional ss)
     LocalTimeValue (LocalTime d (TimeOfDay hh mm ss)) ->
       Formatting.sformat
         ("'" % Formatting.dateDash % " " % Formatting.left 2 '0' % ":" %
          Formatting.left 2 '0' %
          ":" %
-         Formatting.shortest %
+         Formatting.string %
          "'")
         d
         hh
         mm
-        ss
+        (renderFractional ss)
+
+renderFractional :: Pico -> String
+renderFractional x = trim (printf "%.7f" (realToFrac x :: Double) :: String)
+  where
+    trim s =
+      reverse (case dropWhile (== '0') (reverse s) of
+                 s'@('.':_) -> '0' : s'
+                 s' -> s')
 
 -- | A very conservative character escape.
 escapeChar8 :: Word8 -> Text
