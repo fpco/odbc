@@ -21,8 +21,8 @@
 -- Don't use this module if you don't know what you're doing.
 
 module Database.ODBC.Internal
-    -- * Connect/disconnect
-  ( connect
+  ( -- * Connect/disconnect
+    connect
   , close
   , Connection
     -- * Executing queries
@@ -149,6 +149,8 @@ connect ::
   -- when you're done. If you forget to, then the connection will only
   -- be closed when there are no more references to the 'Connection'
   -- value in your program, which might never happen. So take care.
+  -- Use e.g. 'bracket' from "Control.Exception" to do the open/close
+  -- pattern, which will handle exceptions.
 connect string =
   withBound
     (do (ptr, envAndDbc) <-
@@ -648,7 +650,7 @@ getTypedData dbc stmt ty column bufferp bufferlen =
     (\copiedPtr -> do
        assertSuccess
          dbc
-         "getTypedData"
+         ("getTypedData ty=" ++ show ty)
          (odbc_SQLGetData dbc stmt column ty bufferp bufferlen copiedPtr)
        copiedBytes <- peek copiedPtr
        if copiedBytes == sql_null_data

@@ -330,7 +330,7 @@ query c (Query ps) = do
     Right rows' -> pure rows'
     Left e -> liftIO (throwIO (Internal.DataRetrievalError e))
 
--- | Render a query to a plain text SQL query. Useful for debugging.
+-- | Render a query to a SQL query.
 renderQuery :: Query -> Text
 renderQuery (Query ps) = (renderParts (toList ps))
 
