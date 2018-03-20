@@ -1,4 +1,3 @@
-ARG travis_commit
 FROM ubuntu:16.04
 MAINTAINER Chris Done
 
