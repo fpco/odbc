@@ -3,6 +3,8 @@ MAINTAINER Chris Done
 
 # Haskell system dependencies
 
+RUN echo Git commit: $TRAVIS_COMMIT
+
 RUN apt-get update && apt-get install -yq --no-install-suggests --no-install-recommends --force-yes -y librocksdb-dev  netbase git ca-certificates xz-utils build-essential curl && curl -sSL https://get.haskellstack.org/ | sh
 
 # ODBC system dependencies
