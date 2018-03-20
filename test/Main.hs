@@ -47,7 +47,10 @@ import           Text.Printf
 -- Tests
 
 main :: IO ()
-main = hspec spec
+main = do
+  mconnStr <- lookupEnv "ODBC_TEST_CONNECTION_STRING"
+  putStrLn ("Using connection string: " ++ show mconnStr)
+  hspec spec
 
 spec :: Spec
 spec = do
