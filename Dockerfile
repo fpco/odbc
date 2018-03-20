@@ -1,4 +1,4 @@
-FROM ubuntu:16.04
+FROM debian:9-slim
 MAINTAINER Chris Done
 
 # Haskell system dependencies
@@ -7,16 +7,21 @@ RUN apt-get update && apt-get install -yq --no-install-suggests --no-install-rec
 
 # ODBC system dependencies
 
-RUN curl https://packages.microsoft.com/keys/microsoft.asc | apt-key add
-RUN apt-get install apt-transport-https && curl https://packages.microsoft.com/config/ubuntu/15.10/prod.list > /etc/apt/sources.list.d/mssql-release.list && apt-get update
-RUN ACCEPT_EULA=Y apt-get install -y msodbcsql mssql-tools unixodbc-dev freetds-dev locales && locale-gen en_US.UTF-8
+RUN apt-get install -y gnupg apt-transport-https
+RUN curl https://packages.microsoft.com/keys/microsoft.asc | apt-key add -
+RUN curl https://packages.microsoft.com/config/debian/9/prod.list > /etc/apt/sources.list.d/mssql-release.list
+RUN apt-get update
+RUN ACCEPT_EULA=Y apt-get install msodbcsql17 -y
+RUN apt-get install -y unixodbc-dev freetds-dev locales
+RUN locale-gen en_US.UTF-8
 
 # Clone repo
 
-# Once it's publicly released, change it to this:
-RUN git clone https://github.com/fpco/odbc.git --depth 1 && \
+COPY travis_commit.txt travis_commit.txt
+RUN git clone https://github.com/fpco/odbc.git && \
     cd odbc && \
-    git checkout $TRAVIS_COMMIT
+    echo Checking out $(cat ../travis_commit.txt) && \
+    git checkout $(cat ../travis_commit.txt)
 
 # Install GHC and Haskell build dependencies
 

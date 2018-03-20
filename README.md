@@ -61,3 +61,22 @@ test your connection easily.
     > select * from foo
     123123123
     Rows: 1
+
+## Common issues
+
+If you see an error like this:
+
+    [unixODBC][Driver Manager]Can't open lib 'ODBC Driver 13 for SQL Server' : file not found
+
+Then you might be trying to use the wrong driver. You might have
+installed version `17`, so change the string to `ODBC Driver 17 for
+SQL Server`.
+
+If you see an error like this:
+
+    [unixODBC][Driver Manager]Data source name not found and no default driver specified
+
+This is a terrible error message. If passing your DSN via a shell
+environment variable or argument, check that your input string isn't
+quoted e.g. `"Driver=.."` instead of `Driver=..` due to silly shell
+scripting quoting issues.

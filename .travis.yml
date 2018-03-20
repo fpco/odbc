@@ -9,11 +9,12 @@ services:
   - docker
 
 before_install:
-  # Linux
-  - if [[ $TRAVIS_OS_NAME == 'linux' ]]; then docker pull ubuntu:16.04; fi
+  - docker pull ubuntu:16.04
+  - docker pull microsoft/mssql-server-linux:2017-latest
 
 script:
-  # Both Linux and OS X
   - docker run --net=host -e 'ACCEPT_EULA=Y' -e 'SA_PASSWORD=Passw0rd' -d microsoft/mssql-server-linux:2017-latest
-  # Linux
-  - if [[ $TRAVIS_OS_NAME == 'linux' ]]; then docker build . --tag stack-test && docker run --net=host -e "TRAVIS_COMMIT=$TRAVIS_COMMIT" -e "ODBC_TEST_CONNECTION_STRING='DRIVER={ODBC Driver 13 for SQL Server};SERVER=127.0.0.1;Uid=SA;Pwd=Passw0rd'" -w /odbc stack-test:latest stack test; fi
+  - echo "Running docker for commit $TRAVIS_COMMIT"
+  - echo $TRAVIS_COMMIT > travis_commit.txt
+  - docker build . --tag stack-test
+  - docker run --net=host -e "ODBC_TEST_CONNECTION_STRING=\"DRIVER=ODBC Driver 17 for SQL Server;SERVER=127.0.0.1;Uid=SA;Pwd=Passw0rd\"" -w /odbc stack-test:latest stack test

@@ -159,22 +159,22 @@ connect string =
                 fmap (ptr, ) (newForeignPtr odbc_FreeEnvAndDbc (coerce ptr)))
              -- Above: Allocate the environment.
              -- Below: Try to connect to the database.
-        T.useAsPtr
-          string
-          (\wstring len ->
+        withCStringLen
+          (T.unpack string)
+          (\(wstring,len) ->
              uninterruptibleMask_
                (do assertSuccess
                      ptr
-                     "odbc_SQLDriverConnectW"
+                     "odbc_SQLDriverConnect"
                      (withForeignPtr
                         envAndDbc
                         (\dbcPtr ->
-                           odbc_SQLDriverConnectW
+                           odbc_SQLDriverConnect
                              dbcPtr
                              (coerce wstring)
                              (fromIntegral len)))
                    addForeignPtrFinalizer odbc_SQLDisconnect envAndDbc))
-             -- Below: Keep the environment and the database handle in an mvar.
+                         -- Below: Keep the environment and the database handle in an mvar.
         mvar <- newMVar (Just envAndDbc)
         pure (Connection mvar))
 
@@ -776,8 +776,8 @@ foreign import ccall "odbc odbc_AllocEnvAndDbc"
 foreign import ccall "odbc &odbc_FreeEnvAndDbc"
   odbc_FreeEnvAndDbc :: FunPtr (Ptr EnvAndDbc -> IO ())
 
-foreign import ccall "odbc odbc_SQLDriverConnectW"
-  odbc_SQLDriverConnectW :: Ptr EnvAndDbc -> SQLWCHAR -> SQLSMALLINT -> IO RETCODE
+foreign import ccall "odbc odbc_SQLDriverConnect"
+  odbc_SQLDriverConnect :: Ptr EnvAndDbc -> Ptr SQLCHAR -> SQLSMALLINT -> IO RETCODE
 
 foreign import ccall "odbc &odbc_SQLDisconnect"
   odbc_SQLDisconnect :: FunPtr (Ptr EnvAndDbc -> IO ())
