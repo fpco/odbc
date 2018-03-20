@@ -13,10 +13,7 @@ RUN ACCEPT_EULA=Y apt-get install -y msodbcsql mssql-tools unixodbc-dev freetds-
 
 # Clone repo
 
-# Temporarily using this to access the repo
-RUN curl https://chrisdone.com/private-toys/odbc.tar.gz > odbc.tar.gz && tar xzf odbc.tar.gz
-# Once it's publicly released, change it to this:
-#RUN git clone https://github.com/chrisdone/odbc.git --depth 1
+RUN git clone https://github.com/fpco/odbc.git --branch bisect
 
 # Install GHC and Haskell build dependencies
 
