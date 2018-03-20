@@ -10,6 +10,7 @@ services:
 
 before_install:
   - docker pull ubuntu:16.04
+  - docker pull microsoft/mssql-server-linux:2017-latest
 
 script:
   - docker run --net=host -e 'ACCEPT_EULA=Y' -e 'SA_PASSWORD=Passw0rd' -d microsoft/mssql-server-linux:2017-latest
