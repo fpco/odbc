@@ -1,4 +1,4 @@
-# odbc [![Build Status](https://travis-ci.org/fpco/odbc.svg)](https://travis-ci.org/fpco/odbc) [![Windows build status](https://ci.appveyor.com/api/projects/status/github/fpco/odbc?branch=master&svg=true)](https://ci.appveyor.com/project/fpco/odbc)
+# odbc [![Build Status](https://travis-ci.org/fpco/odbc.svg)](https://travis-ci.org/fpco/odbc) [![Build status](https://ci.appveyor.com/api/projects/status/vpn6a1pme25upbux?svg=true)](https://ci.appveyor.com/project/chrisdone/odbc-0os0b)
 
 Haskell binding to the ODBC API, with a strong emphasis on stability,
 testing and simplicity.
@@ -11,7 +11,7 @@ The following database drivers are tested against in CI:
 
 The following operating systems are tested against in CI:
 
-* Windows [![Windows build status](https://ci.appveyor.com/api/projects/status/github/fpco/odbc?branch=master&svg=true)](https://ci.appveyor.com/project/fpco/odbc)
+* Windows [![Build status](https://ci.appveyor.com/api/projects/status/vpn6a1pme25upbux?svg=true)](https://ci.appveyor.com/project/chrisdone/odbc-0os0b)
 * Linux [![Build Status](https://travis-ci.org/fpco/odbc.svg)](https://travis-ci.org/fpco/odbc)
 
 I develop and test this library on OS X, but currently do not have a
