@@ -18,8 +18,8 @@ RUN ACCEPT_EULA=Y apt-get install -y msodbcsql mssql-tools unixodbc-dev freetds-
 # Once it's publicly released, change it to this:
 RUN git clone https://github.com/fpco/odbc.git --depth 1 && \
     cd odbc && \
-    echo Checking out $(cat travis_commit.txt) && \
-    git checkout $(cat travis_commit.txt)
+    echo Checking out $(cat ../travis_commit.txt) && \
+    git checkout $(cat ../travis_commit.txt)
 
 # Install GHC and Haskell build dependencies
 
