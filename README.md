@@ -1,4 +1,4 @@
-# odbc [![Build Status](https://travis-ci.org/chrisdone/odbc.svg)](https://travis-ci.org/chrisdone/odbc) [![Windows build status](https://ci.appveyor.com/api/projects/status/github/chrisdone/odbc?branch=master&svg=true)](https://ci.appveyor.com/project/chrisdone/odbc)
+# odbc [![Build Status](https://travis-ci.org/fpco/odbc.svg)](https://travis-ci.org/fpco/odbc) [![Windows build status](https://ci.appveyor.com/api/projects/status/github/fpco/odbc?branch=master&svg=true)](https://ci.appveyor.com/project/fpco/odbc)
 
 Haskell binding to the ODBC API, with a strong emphasis on stability,
 testing and simplicity.
@@ -11,8 +11,8 @@ The following database drivers are tested against in CI:
 
 The following operating systems are tested against in CI:
 
-* Windows [![Windows build status](https://ci.appveyor.com/api/projects/status/github/chrisdone/odbc?branch=master&svg=true)](https://ci.appveyor.com/project/chrisdone/odbc)
-* Linux [![Build Status](https://travis-ci.org/chrisdone/odbc.svg)](https://travis-ci.org/chrisdone/odbc)
+* Windows [![Windows build status](https://ci.appveyor.com/api/projects/status/github/fpco/odbc?branch=master&svg=true)](https://ci.appveyor.com/project/fpco/odbc)
+* Linux [![Build Status](https://travis-ci.org/fpco/odbc.svg)](https://travis-ci.org/fpco/odbc)
 
 I develop and test this library on OS X, but currently do not have a
 reliable way to run Microsoft SQL Server on Travis CI.
@@ -44,9 +44,9 @@ driver is
 [here](https://docs.microsoft.com/en-us/sql/connect/odbc/linux-mac/installing-the-microsoft-odbc-driver-for-sql-server).
 
 I have tested the OS X instructions on my own machine.
-[This project's Dockerfile](https://github.com/chrisdone/odbc/blob/master/Dockerfile)
+[This project's Dockerfile](https://github.com/fpco/odbc/blob/master/Dockerfile)
 follows setup instructions for Linux, and
-[the AppVeyor file](https://github.com/chrisdone/odbc/blob/master/appveyor.yml)
+[the AppVeyor file](https://github.com/fpco/odbc/blob/master/appveyor.yml)
 follows the setup instructions for Windows.
 
 There is a test program that comes with the package called `odbc`
