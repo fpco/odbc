@@ -406,12 +406,13 @@ connectWithString :: IO Connection
 connectWithString = do
   mconnStr <- lookupEnv "ODBC_TEST_CONNECTION_STRING"
   case mconnStr of
-    Nothing ->
+    Just connStr
+      | not (null connStr) -> Internal.connect (T.pack connStr)
+    _ ->
       error
         "Need ODBC_TEST_CONNECTION_STRING environment variable.\n\
         \Example:\n\
         \ODBC_TEST_CONNECTION_STRING='DRIVER={ODBC Driver 13 for SQL Server};SERVER=127.0.0.1;Uid=SA;Pwd=Passw0rd;Encrypt=no'"
-    Just connStr -> Internal.connect (T.pack connStr)
 
 --------------------------------------------------------------------------------
 -- Orphan instances
