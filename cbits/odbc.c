@@ -119,9 +119,9 @@ void odbc_FreeEnvAndDbc(EnvAndDbc *envAndDbc){
 ////////////////////////////////////////////////////////////////////////////////
 // Connect/disconnect
 
-RETCODE odbc_SQLDriverConnectW(EnvAndDbc *envAndDbc, SQLWCHAR *connString, SQLSMALLINT len){
+RETCODE odbc_SQLDriverConnect(EnvAndDbc *envAndDbc, SQLCHAR *connString, SQLSMALLINT len){
   SQLSMALLINT ignored = 0;
-  RETCODE r = SQLDriverConnectW(
+  RETCODE r = SQLDriverConnect(
     *(envAndDbc->dbc),
     NULL,
     connString,
@@ -131,7 +131,7 @@ RETCODE odbc_SQLDriverConnectW(EnvAndDbc *envAndDbc, SQLWCHAR *connString, SQLSM
     &ignored,
     SQL_DRIVER_NOPROMPT);
   if (r == SQL_ERROR)
-    odbc_ProcessLogMessages(envAndDbc, SQL_HANDLE_DBC, *(envAndDbc->dbc), "odbc_SQLDriverConnectW", FALSE);
+    odbc_ProcessLogMessages(envAndDbc, SQL_HANDLE_DBC, *(envAndDbc->dbc), "odbc_SQLDriverConnect", FALSE);
   return r;
 }
 
