@@ -17,4 +17,4 @@ script:
   - docker run --net=host -e 'ACCEPT_EULA=Y' -e 'SA_PASSWORD=Passw0rd' -d microsoft/mssql-server-linux:2017-latest
   # Linux
   - echo "Running docker for commit $TRAVIS_COMMIT"
-  - if [[ $TRAVIS_OS_NAME == 'linux' ]]; then docker build --build-arg "TRAVIS_COMMIT=$TRAVIS_COMMIT" . --tag stack-test && docker run --net=host -e "ODBC_TEST_CONNECTION_STRING='DRIVER={ODBC Driver 13 for SQL Server};SERVER=127.0.0.1;Uid=SA;Pwd=Passw0rd'" -w /odbc stack-test:latest stack test; fi
+  - if [[ $TRAVIS_OS_NAME == 'linux' ]]; then docker build --build-arg travis_commit=$TRAVIS_COMMIT . --tag stack-test && docker run --net=host -e "ODBC_TEST_CONNECTION_STRING='DRIVER={ODBC Driver 13 for SQL Server};SERVER=127.0.0.1;Uid=SA;Pwd=Passw0rd'" -w /odbc stack-test:latest stack test; fi
