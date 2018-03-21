@@ -17,4 +17,4 @@ script:
   - echo "Running docker for commit $TRAVIS_COMMIT"
   - echo $TRAVIS_COMMIT > travis_commit.txt
   - docker build . --tag stack-test
-  - docker run --net=host -e "ODBC_TEST_CONNECTION_STRING='DRIVER={ODBC Driver 17 for SQL Server};SERVER=127.0.0.1;Uid=SA;Pwd=Passw0rd'" -w /odbc stack-test:latest stack test
+  - docker run --net=host -e "ODBC_TEST_CONNECTION_STRING=\"DRIVER=ODBC Driver 17 for SQL Server;SERVER=192.168.99.100;Uid=SA;Pwd=Passw0rd\"" -w /odbc stack-test:latest stack test
