@@ -76,6 +76,7 @@ If you see an error like this:
 
     [unixODBC][Driver Manager]Data source name not found and no default driver specified
 
-Try re-installing on a fresh system. This one is hard to debug. The
-`Dockerfile` in this project has a Debian configuration that works
-correctly.
+This is a terrible error message. If passing your DSN via a shell
+environment variable or argument, check that your input string isn't
+quoted e.g. `"Driver=.."` instead of `Driver=..` due to silly shell
+scripting quoting issues.
