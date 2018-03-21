@@ -53,6 +53,8 @@ There is a test program that comes with the package called `odbc`
 which accepts a connection string as its argument. You can use this to
 test your connection easily.
 
+(Use `17` instead of `13` if that's the driver you installed.)
+
     $ stack exec odbc 'DRIVER={ODBC Driver 13 for SQL Server};SERVER=192.168.99.101;Uid=SA;Pwd=Passw0rd;Encrypt=no'
     > create table foo (i int)
     Rows: 0
