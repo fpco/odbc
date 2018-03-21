@@ -14,7 +14,7 @@
 
 module Main where
 
-import           Control.Exception (try, bracket, onException, SomeException)
+import           Control.Exception (try, onException, SomeException)
 import           Control.Monad
 import           Control.Monad.IO.Class
 import           Data.ByteString (ByteString)
