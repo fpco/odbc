@@ -258,36 +258,38 @@ quickCheckRoundtrip ::
   -> String
   -> Spec
 quickCheckRoundtrip l typ =
-  around
-    (bracket
-       (do c <- connectWithString
-           SQLServer.exec c "DROP TABLE IF EXISTS test"
-           SQLServer.exec c ("CREATE TABLE test (f " <> fromString typ <> ")")
-           pure c)
-       SQLServer.close)
-    (it
-       ("QuickCheck roundtrip: HS=" <> l <> ", SQL=" <> typ)
-       (\c ->
-          property
-            (\input ->
-               monadicIO
-                 (do let q =
-                           "INSERT INTO test VALUES (" <> toSql (input :: t) <>
-                           ")"
-                     liftIO
-                       (onException
-                          (SQLServer.exec c q)
-                          ((T.putStrLn (SQLServer.renderQuery q))))
-                     [Identity result] <- SQLServer.query c "SELECT f FROM test"
-                     monitor
-                       (counterexample
-                          (unlines
-                             [ "Expected: " ++ show input
-                             , "Actual: " ++ show result
-                             , "Query was: " ++
-                               T.unpack (SQLServer.renderQuery q)
-                             ]))
-                     assert (result == input)))))
+  beforeAll
+    (do c <- connectWithString
+        SQLServer.exec c "DROP TABLE IF EXISTS test"
+        SQLServer.exec c ("CREATE TABLE test (f " <> fromString typ <> ")")
+        pure c)
+    (afterAll
+       SQLServer.close
+       (it
+          ("QuickCheck roundtrip: HS=" <> l <> ", SQL=" <> typ)
+          (\c ->
+             property
+               (\input ->
+                  monadicIO
+                    (do SQLServer.exec c "TRUNCATE TABLE test"
+                        let q =
+                              "INSERT INTO test VALUES (" <> toSql (input :: t) <>
+                              ")"
+                        liftIO
+                          (onException
+                             (SQLServer.exec c q)
+                             ((T.putStrLn (SQLServer.renderQuery q))))
+                        [Identity result] <-
+                          SQLServer.query c "SELECT f FROM test"
+                        monitor
+                          (counterexample
+                             (unlines
+                                [ "Expected: " ++ show input
+                                , "Actual: " ++ show result
+                                , "Query was: " ++
+                                  T.unpack (SQLServer.renderQuery q)
+                                ]))
+                        assert (result == input))))))
 
 quickCheckOneway ::
      forall t. (Arbitrary t, Eq t, Show t, ToSql t, FromValue t)
@@ -295,36 +297,42 @@ quickCheckOneway ::
   -> String
   -> Spec
 quickCheckOneway l typ =
-  around
-    (bracket
-       (do c <- connectWithString
-           SQLServer.exec c "DROP TABLE IF EXISTS test"
-           SQLServer.exec c ("CREATE TABLE test (f " <> fromString typ <> ")")
-           pure c)
-       SQLServer.close)
-    (it
-       ("QuickCheck one-way: HS=" <> l <> ", SQL=" <> typ)
-       (\c ->
-          property
-            (\input ->
-               monadicIO
-                 (do let q =
-                           "INSERT INTO test VALUES (" <> toSql (input :: t) <>
-                           ")"
-                     liftIO
-                       (onException
-                          (SQLServer.exec c q)
-                          ((T.putStrLn (SQLServer.renderQuery q))))
-                     [Identity result] <- SQLServer.query c "SELECT f FROM test"
-                     monitor
-                       (counterexample
-                          (unlines
-                             [ "Expected: " ++ show input
-                             , "Actual: " ++ show (result :: t)
-                             , "Query was: " ++
-                               T.unpack (SQLServer.renderQuery q)
-                             ]))
-                     assert True))))
+  beforeAll
+    (do c <- connectWithString
+        SQLServer.exec c "DROP TABLE IF EXISTS test"
+        SQLServer.exec c ("CREATE TABLE test (f " <> fromString typ <> ")")
+        pure c)
+    (afterAll
+       SQLServer.close
+       (it
+          ("QuickCheck one-way: HS=" <> l <> ", SQL=" <> typ)
+          (\c ->
+             property
+               (\input ->
+                  monadicIO
+                    (do (let q = "TRUNCATE TABLE test"
+                         in liftIO
+                              (onException
+                                 (SQLServer.exec c q)
+                                 ((T.putStrLn (SQLServer.renderQuery q)))))
+                        let q =
+                              "INSERT INTO test VALUES (" <> toSql (input :: t) <>
+                              ")"
+                        liftIO
+                          (onException
+                             (SQLServer.exec c q)
+                             ((T.putStrLn (SQLServer.renderQuery q))))
+                        [Identity result] <-
+                          SQLServer.query c "SELECT f FROM test"
+                        monitor
+                          (counterexample
+                             (unlines
+                                [ "Expected: " ++ show input
+                                , "Actual: " ++ show (result :: t)
+                                , "Query was: " ++
+                                  T.unpack (SQLServer.renderQuery q)
+                                ]))
+                        assert True)))))
 
 quickCheckInternalRoundtrip ::
      forall t. (Eq t, Show t, Arbitrary t)
@@ -334,57 +342,64 @@ quickCheckInternalRoundtrip ::
   -> (Value -> Maybe t)
   -> Spec
 quickCheckInternalRoundtrip hstype typ shower unpack =
-  around
-    (bracket
-       (do c <- connectWithString
-           Internal.exec c "DROP TABLE IF EXISTS test"
-           Internal.exec c ("CREATE TABLE test (f " <> typ <> ")")
-           pure c)
-       Internal.close)
-    (it
-       ("QuickCheck roundtrip: HS=" <> T.unpack  hstype <> ", SQL="  <> T.unpack typ)
-       (\c ->
-          property
-            (\input ->
-               monadicIO
-                 (do let q = "INSERT INTO test VALUES (" <> shower input <> ")"
-                     rows <-
-                       liftIO
-                         (try
-                            (do onException (Internal.exec c q) (putStrLn "Exec failed.")
-                                onException
-                                  (Internal.query c "SELECT * FROM test")
-                                  (putStrLn "Query failed!")))
-                     let expected :: Either String t
-                         expected = Right input
-                         result :: Either String t
-                         result =
-                           case rows of
-                             Right [[Just x]] ->
-                               case unpack x of
-                                 Nothing -> Left "Couldn't unpack value."
-                                 Just v -> pure v
-                             Right _ -> Left "Invalid number of values returned."
-                             Left (_ :: SomeException) ->
-                               Left "Couldn't get value from row in test suite."
-                     when
-                       (result /= expected)
-                       (liftIO
-                          (putStr
+  beforeAll
+    (do c <- connectWithString
+        Internal.exec c "DROP TABLE IF EXISTS test"
+        Internal.exec c ("CREATE TABLE test (f " <> typ <> ")")
+        pure c)
+    (afterAll
+       Internal.close
+       (it
+          ("QuickCheck roundtrip: HS=" <> T.unpack hstype <> ", SQL=" <>
+           T.unpack typ)
+          (\c ->
+             property
+               (\input ->
+                  monadicIO
+                    (do Internal.exec c "TRUNCATE TABLE test"
+                        let q =
+                              "INSERT INTO test VALUES (" <> shower input <> ")"
+                        rows <-
+                          liftIO
+                            (try
+                               (do onException
+                                     (Internal.exec c q)
+                                     (putStrLn "Exec failed.")
+                                   onException
+                                     (Internal.query c "SELECT * FROM test")
+                                     (putStrLn "Query failed!")))
+                        let expected :: Either String t
+                            expected = Right input
+                            result :: Either String t
+                            result =
+                              case rows of
+                                Right [[Just x]] ->
+                                  case unpack x of
+                                    Nothing -> Left "Couldn't unpack value."
+                                    Just v -> pure v
+                                Right _ ->
+                                  Left "Invalid number of values returned."
+                                Left (_ :: SomeException) ->
+                                  Left
+                                    "Couldn't get value from row in test suite."
+                        when
+                          (result /= expected)
+                          (liftIO
+                             (putStr
+                                (unlines
+                                   [ "Expected: " ++ show expected
+                                   , "Actual: " ++ show rows
+                                   , "Query was: " ++ show q
+                                   , "QuickCheck value: " ++ show input
+                                   ])))
+                        monitor
+                          (counterexample
                              (unlines
                                 [ "Expected: " ++ show expected
                                 , "Actual: " ++ show rows
                                 , "Query was: " ++ show q
-                                , "QuickCheck value: " ++ show input
-                                ])))
-                     monitor
-                       (counterexample
-                          (unlines
-                             [ "Expected: " ++ show expected
-                             , "Actual: " ++ show rows
-                             , "Query was: " ++ show q
-                             ]))
-                     assert (result == expected)))))
+                                ]))
+                        assert (result == expected))))))
 
 --------------------------------------------------------------------------------
 -- Helpers
