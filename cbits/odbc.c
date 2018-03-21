@@ -242,7 +242,7 @@ void odbc_ProcessLogMessages(EnvAndDbc *envAndDbc, SQLSMALLINT plm_handle_type, 
     plm_retcode = SQLGetDiagRec(plm_handle_type, plm_handle, plm_cRecNmbr,
                                 plm_szSqlState, &plm_pfNativeError, (SQLCHAR *)envAndDbc->error,
                                 MAXBUFLEN - 1, &plm_pcbErrorMsg);
-    printf("odbc_ProcessLogMessages: %s\n", envAndDbc->error);
+    // printf("odbc_ProcessLogMessages: %s\n", envAndDbc->error);
     plm_cRecNmbr++;
   }
 }
