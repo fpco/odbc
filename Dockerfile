@@ -17,7 +17,7 @@ RUN locale-gen en_US.UTF-8
 
 # Clone repo
 
-# Once it's publicly released, change it to this:
+COPY travis_commit.txt travis_commit.txt
 RUN git clone https://github.com/fpco/odbc.git && \
     cd odbc && \
     echo Checking out $(cat ../travis_commit.txt) && \
