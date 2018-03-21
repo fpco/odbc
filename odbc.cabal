@@ -58,7 +58,7 @@ test-suite test
   hs-source-dirs: test
   main-is: Main.hs
 
-test-suite space
+benchmark space
   default-language:  Haskell2010
   type: exitcode-stdio-1.0
   build-depends: base, odbc, weigh, text, async
