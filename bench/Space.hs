@@ -75,7 +75,7 @@ runs !n m = m >> runs (n-1) m
 
 connectWithString :: IO Internal.Connection
 connectWithString = do
-  mconnStr <- lookupEnv "ODBC_TEST_CONNECTION_STRING"
+  mconnStr <- lookupEnvUnquote "ODBC_TEST_CONNECTION_STRING"
   case mconnStr of
     Nothing ->
       error
@@ -83,3 +83,9 @@ connectWithString = do
         \Example:\n\
         \ODBC_TEST_CONNECTION_STRING='DRIVER={ODBC Driver 13 for SQL Server};SERVER=127.0.0.1;Uid=SA;Pwd=Passw0rd;Encrypt=no'"
     Just connStr -> Internal.connect (T.pack connStr)
+
+-- | I had trouble passing in environment variables via Docker on
+-- Travis without the value coming in with quotes around it.
+lookupEnvUnquote :: String -> IO (Maybe [Char])
+lookupEnvUnquote = fmap (fmap strip) . lookupEnv
+  where strip = reverse . dropWhile (=='"') . reverse . dropWhile (=='"')
