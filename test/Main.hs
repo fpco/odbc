@@ -56,11 +56,22 @@ spec = do
   describe
     "Database.ODBC.Internal"
     (do describe "Connectivity" connectivity
+        describe "Regression tests" regressions
         describe "Data retrieval" dataRetrieval
         describe "Big data" bigData)
   describe
     "Database.ODBC.SQLServer"
     (describe "Conversion to SQL" conversionTo)
+
+regressions :: Spec
+regressions = do
+  it
+    "Internal.exec can return SQL_NO_DATA"
+    (do c <- connectWithString
+        Internal.exec c "DROP TABLE IF EXISTS wibble"
+        Internal.exec c "CREATE TABLE wibble (i integer)"
+        Internal.exec c "DELETE FROM wibble"
+        Internal.close c)
 
 -- | Test fields with large data like megabytes of text. Just to check
 -- we don't have some kind of hard limit problem.

@@ -270,7 +270,7 @@ withExecDirect dbc string cont =
   withStmt
     dbc
     (\stmt -> do
-       assertSuccess
+       assertSuccessOrNoData
          dbc
          "odbc_SQLExecDirectW"
          (T.useAsPtr
@@ -697,6 +697,17 @@ assertSuccess :: Ptr EnvAndDbc -> String -> IO RETCODE -> IO ()
 assertSuccess dbc label m = do
   retcode <- m
   if retcode == sql_success || retcode == sql_success_with_info
+    then pure ()
+    else do
+      ptr <- odbc_error dbc
+      string <- peekCString ptr
+      throwIO (UnsuccessfulReturnCode label (coerce retcode) string)
+
+-- | Check that the RETCODE is successful or no data.
+assertSuccessOrNoData :: Ptr EnvAndDbc -> String -> IO RETCODE -> IO ()
+assertSuccessOrNoData dbc label m = do
+  retcode <- m
+  if retcode == sql_success || retcode == sql_success_with_info || retcode == sql_no_data
     then pure ()
     else do
       ptr <- odbc_error dbc
