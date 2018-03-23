@@ -65,6 +65,13 @@ instance FromValue ByteString where
          ByteStringValue x -> pure (id x)
          v -> Left ("Expected ByteString, but got: " ++ show v))
 
+instance FromValue Binary where
+  fromValue =
+    withNonNull
+      (\case
+         BinaryValue x -> pure (id x)
+         v -> Left ("Expected Binary, but got: " ++ show v))
+
 instance FromValue L.ByteString where
   fromValue =
     withNonNull
@@ -163,6 +170,10 @@ instance FromRow LT.Text where
   fromRow _ = Left "Unexpected number of fields in row"
 
 instance FromRow ByteString where
+  fromRow [v] = fromValue v
+  fromRow _ = Left "Unexpected number of fields in row"
+
+instance FromRow Binary where
   fromRow [v] = fromValue v
   fromRow _ = Left "Unexpected number of fields in row"
 

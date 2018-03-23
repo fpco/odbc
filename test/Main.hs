@@ -14,7 +14,7 @@
 
 module Main where
 
-import           Control.Exception (try, onException, SomeException)
+import           Control.Exception (try, onException, SomeException, catch, throwIO)
 import           Control.Monad
 import           Control.Monad.IO.Class
 import           Data.ByteString (ByteString)
@@ -32,7 +32,7 @@ import qualified Data.Text.IO as T
 import           Data.Time
 import           Data.Word
 import           Database.ODBC.Conversion (FromValue(..))
-import           Database.ODBC.Internal (Value (..), Connection, ODBCException(..), Step(..))
+import           Database.ODBC.Internal (Value (..), Connection, ODBCException(..), Step(..), Binary)
 import qualified Database.ODBC.Internal as Internal
 import           Database.ODBC.SQLServer (ToSql(..))
 import qualified Database.ODBC.SQLServer as SQLServer
@@ -110,6 +110,8 @@ conversionTo = do
   quickCheckRoundtrip @Text "Text" ("nvarchar(" <> (show maxStringLen) <> ")")
   quickCheckRoundtrip @ByteString "ByteString" "text"
   quickCheckRoundtrip @ByteString "ByteString" ("varchar(" <>  (show maxStringLen) <> ")")
+  quickCheckRoundtrip @TestBinary "ByteString" ("binary(" <>  (show maxStringLen) <> ")")
+  quickCheckRoundtrip @Binary "ByteString" ("varbinary(" <>  (show maxStringLen) <> ")")
 
 connectivity :: Spec
 connectivity = do
@@ -287,11 +289,24 @@ quickCheckRoundtrip l typ =
                               "INSERT INTO test VALUES (" <> toSql (input :: t) <>
                               ")"
                         liftIO
-                          (onException
+                          (catch
                              (SQLServer.exec c q)
-                             ((T.putStrLn (SQLServer.renderQuery q))))
+                             (\e -> do
+                                print (e :: SomeException)
+                                T.putStrLn (SQLServer.renderQuery q)
+                                SQLServer.close c
+                                throwIO e))
                         [Identity result] <-
                           SQLServer.query c "SELECT f FROM test"
+                        when
+                          (result /= input)
+                          (liftIO
+                             (putStr
+                                (unlines
+                                   [ "Expected: " ++ show input
+                                   , "Actual: " ++ show result
+                                   , "Query was: " ++ show q
+                                   ])))
                         monitor
                           (counterexample
                              (unlines
@@ -461,6 +476,20 @@ instance Arbitrary ByteString where
       (S8.filter (\c -> isAscii c && validTextChar c) .
        S8.pack . take maxStringLen)
       arbitrary
+
+instance Arbitrary Binary where
+  arbitrary = fmap SQLServer.Binary arbitrary
+
+newtype TestBinary = TestBinary Binary
+  deriving (Show, Eq, Ord, SQLServer.ToSql, FromValue)
+
+instance Arbitrary TestBinary where
+  arbitrary = do
+    bytes <- arbitrary
+    pure
+      (TestBinary
+         (SQLServer.Binary
+            (S.take maxStringLen (bytes <> S.replicate maxStringLen 0))))
 
 instance Arbitrary Day where
   arbitrary = do

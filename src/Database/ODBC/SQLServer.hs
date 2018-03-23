@@ -27,6 +27,7 @@ module Database.ODBC.SQLServer
   , ToSql(..)
   , FromValue(..)
   , FromRow(..)
+  , Internal.Binary(..)
 
     -- * Streaming results
     -- $streaming
@@ -247,19 +248,24 @@ class ToSql a where
 instance ToSql Value where
   toSql = Query . Seq.fromList . pure . ValuePart
 
--- | Corresponds to NTEXT of SQL Server.
+-- | Corresponds to NTEXT (Unicode) of SQL Server.
 instance ToSql Text where
   toSql = toSql . TextValue
 
--- | Corresponds to NTEXT of SQL Server.
+-- | Corresponds to NTEXT (Unicode) of SQL Server.
 instance ToSql LT.Text where
   toSql = toSql . TextValue . LT.toStrict
 
--- | Corresponds to BINARY or TEXT of SQL Server.
+-- | Corresponds to TEXT (non-Unicode) of SQL Server. For proper
+-- BINARY, see the 'Binary' type.
 instance ToSql ByteString where
   toSql = toSql . ByteStringValue
 
--- | Corresponds to BINARY or TEXT of SQL Server.
+instance ToSql Internal.Binary where
+  toSql = toSql . BinaryValue
+
+-- | Corresponds to TEXT (non-Unicode) of SQL Server. For Unicode, use
+-- the 'Text' type.
 instance ToSql L.ByteString where
   toSql = toSql . ByteStringValue . L.toStrict
 
@@ -385,6 +391,13 @@ renderValue :: Value -> Text
 renderValue =
   \case
     TextValue t -> "(N'" <> T.concatMap escapeChar t <> "')"
+    BinaryValue (Internal.Binary bytes) ->
+      "0x" <>
+      T.concat
+        (map
+           (Formatting.sformat
+              (Formatting.left 2 '0' Formatting.%. Formatting.hex))
+           (S.unpack bytes))
     ByteStringValue xs ->
       "('" <> T.concat (map escapeChar8 (S.unpack xs)) <> "')"
     BoolValue True -> "1"

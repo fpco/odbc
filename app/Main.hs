@@ -52,6 +52,7 @@ repl c = do
           \case
             ODBC.TextValue t -> show t
             ODBC.ByteStringValue bs -> show bs
+            ODBC.BinaryValue bs -> show bs
             ODBC.BoolValue b -> show b
             ODBC.DoubleValue d -> printf "%f" d
             ODBC.FloatValue d -> printf "%f" d

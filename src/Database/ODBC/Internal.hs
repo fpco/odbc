@@ -29,6 +29,7 @@ module Database.ODBC.Internal
   , exec
   , query
   , Value(..)
+  , Binary(..)
     -- * Streaming results
   , stream
   , Step(..)
@@ -100,7 +101,11 @@ data Value
     -- don't know the encoding. Use 'Data.Text.Encoding.decodeUtf8' if
     -- the string is UTF-8 encoded, or
     -- 'Data.Text.Encoding.decodeUtf16LE' if it is UTF-16 encoded. For
-    -- other encodings, see the Haskell text-icu package.
+    -- other encodings, see the Haskell text-icu package.  For raw
+    -- binary, see 'BinaryValue'.
+  | BinaryValue !Binary
+    -- ^ Only a vector of bytes. Intended for binary data, not for
+    -- ASCII text.
   | BoolValue !Bool
     -- ^ A simple boolean.
   | DoubleValue !Double
@@ -119,6 +124,16 @@ data Value
     -- ^ Local date and time.
   deriving (Eq, Show, Typeable, Ord, Generic, Data)
 instance NFData Value
+
+-- | A simple newtype wrapper around the 'ByteString' type to use when
+-- you want to mean the @binary@ type of SQL, and render to binary
+-- literals e.g. @0xFFEF01@.
+--
+-- The 'ByteString' type is already mapped to the non-Unicode 'text'
+-- type.
+newtype Binary = Binary
+  { unBinary :: ByteString
+  } deriving (Show, Eq, Ord, Data, Generic, Typeable, NFData)
 
 -- | A step in the streaming process for the 'stream' function.
 data Step a
@@ -420,6 +435,8 @@ getData dbc stmt i col =
      | colType == sql_varchar -> getBytesData dbc stmt i
      | colType == sql_wvarchar -> getTextData dbc stmt i
      | colType == sql_wlongvarchar -> getTextData dbc stmt i
+     | colType == sql_binary -> getBinaryData dbc stmt i
+     | colType == sql_varbinary -> getBinaryData dbc stmt i
      | colType == sql_bit ->
        withMalloc
          (\bitPtr -> do
@@ -589,11 +606,12 @@ getData dbc stmt i col =
   where
     colType = columnType col
 
--- | Get the column's data as a vector of bytes.
+-- | Get the column's data as a vector of CHAR.
 getBytesData :: Ptr EnvAndDbc -> SQLHSTMT s -> SQLUSMALLINT -> IO (Maybe Value)
 getBytesData dbc stmt column = do
   mavailableBytes <- getSize dbc stmt sql_c_char column
   case mavailableBytes of
+    Just 0 -> pure (Just (ByteStringValue mempty))
     Just availableBytes -> do
       let allocBytes = availableBytes + 1
       bufferp <- callocBytes (fromIntegral allocBytes)
@@ -609,11 +627,33 @@ getBytesData dbc stmt column = do
       evaluate (Just (ByteStringValue bs))
     Nothing -> pure Nothing
 
+-- | Get the column's data as raw binary.
+getBinaryData :: Ptr EnvAndDbc -> SQLHSTMT s -> SQLUSMALLINT -> IO (Maybe Value)
+getBinaryData dbc stmt column = do
+  mavailableBinary <- getSize dbc stmt sql_c_binary column
+  case mavailableBinary of
+    Just 0 -> pure (Just (BinaryValue (Binary mempty)))
+    Just availableBinary -> do
+      let allocBinary = availableBinary
+      bufferp <- callocBytes (fromIntegral allocBinary)
+      void
+        (getTypedData
+           dbc
+           stmt
+           sql_c_binary
+           column
+           (coerce bufferp)
+           (SQLLEN (fromIntegral allocBinary)))
+      bs <- S.unsafePackMallocCStringLen (bufferp, fromIntegral availableBinary)
+      evaluate (Just (BinaryValue (Binary bs)))
+    Nothing -> pure Nothing
+
 -- | Get the column's data as a text string.
 getTextData :: Ptr EnvAndDbc -> SQLHSTMT s -> SQLUSMALLINT -> IO (Maybe Value)
 getTextData dbc stmt column = do
   mavailableChars <- getSize dbc stmt sql_c_wchar column
   case mavailableChars of
+    Just 0 -> pure (Just (TextValue mempty))
     Nothing -> pure Nothing
     Just availableBytes -> do
       let allocBytes = availableBytes + 2
@@ -700,18 +740,25 @@ assertSuccess dbc label m = do
     then pure ()
     else do
       ptr <- odbc_error dbc
-      string <- peekCString ptr
+      string <-
+        if nullPtr == ptr
+          then pure ""
+          else peekCString ptr
       throwIO (UnsuccessfulReturnCode label (coerce retcode) string)
 
 -- | Check that the RETCODE is successful or no data.
 assertSuccessOrNoData :: Ptr EnvAndDbc -> String -> IO RETCODE -> IO ()
 assertSuccessOrNoData dbc label m = do
   retcode <- m
-  if retcode == sql_success || retcode == sql_success_with_info || retcode == sql_no_data
+  if retcode == sql_success ||
+     retcode == sql_success_with_info || retcode == sql_no_data
     then pure ()
     else do
       ptr <- odbc_error dbc
-      string <- peekCString ptr
+      string <-
+        if nullPtr == ptr
+          then pure ""
+          else peekCString ptr
       throwIO (UnsuccessfulReturnCode label (coerce retcode) string)
 
 --------------------------------------------------------------------------------
@@ -970,11 +1017,11 @@ sql_type_timestamp =  93
 sql_longvarchar :: SQLSMALLINT
 sql_longvarchar = (-1)
 
--- sql_binary :: SQLSMALLINT
--- sql_binary = (-2)
+sql_binary :: SQLSMALLINT
+sql_binary = (-2)
 
--- sql_varbinary :: SQLSMALLINT
--- sql_varbinary = (-3)
+sql_varbinary :: SQLSMALLINT
+sql_varbinary = (-3)
 
 -- sql_longvarbinary :: SQLSMALLINT
 -- sql_longvarbinary = (-4)
@@ -999,6 +1046,9 @@ sql_c_wchar = coerce sql_wchar
 
 sql_c_char :: SQLCTYPE
 sql_c_char = coerce sql_char
+
+sql_c_binary :: SQLCTYPE
+sql_c_binary = coerce sql_binary
 
 sql_c_double :: SQLCTYPE
 sql_c_double = coerce sql_double
