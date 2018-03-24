@@ -78,11 +78,7 @@ import           Text.Printf
 -- $building
 --
 -- You have to compile your projects using the @-threaded@ flag to
--- GHC. In your .cabal file, this would look like:
---
--- @
--- ghc-options: -threaded
--- @
+-- GHC. In your .cabal file, this would look like: @ghc-options: -threaded@
 
 -- $usage
 --

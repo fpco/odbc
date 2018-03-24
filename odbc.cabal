@@ -9,7 +9,7 @@ version:             0.0.1
 license:             BSD3
 license-file:        LICENSE
 build-type:          Simple
-extra-source-files:  README.md
+extra-source-files:  README.md doc/style.css doc/patch.sh doc/init.js doc/highlight.pack.js
 cabal-version:       >=1.10
 
 library
