@@ -29,7 +29,7 @@ class FromValue a where
 
 -- | Expect a value to be non-null.
 withNonNull ::
-     FromValue a => (Value -> Either String a) -> Maybe Value -> Either String a
+     (Value -> Either String a) -> Maybe Value -> Either String a
 withNonNull f =
   \case
     Nothing -> Left "Unexpected NULL for value"

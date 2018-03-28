@@ -11,6 +11,7 @@ license-file:        LICENSE
 build-type:          Simple
 extra-source-files:  README.md doc/style.css doc/patch.sh doc/init.js doc/highlight.pack.js
 cabal-version:       >=1.10
+homepage:            https://github.com/fpco/odbc
 
 library
   hs-source-dirs:    src
@@ -28,7 +29,7 @@ library
   c-sources:         cbits/odbc.c
   include-dirs:      cbits
   build-depends:
-    base >= 4.7 && < 5,
+    base > 4.9.0.0 && < 5,
     deepseq,
     async,
     bytestring,
@@ -36,7 +37,9 @@ library
     unliftio-core,
     formatting >= 6.3.1,
     containers,
-    time
+    time,
+    semigroups,
+    transformers
 
 executable odbc
   hs-source-dirs:    app

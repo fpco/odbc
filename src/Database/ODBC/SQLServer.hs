@@ -57,7 +57,8 @@ import           Data.Data
 import           Data.Fixed
 import           Data.Foldable
 import           Data.Int
-import           Data.Monoid
+import           Data.Monoid (Monoid, (<>))
+import           Data.Semigroup (Semigroup)
 import           Data.Sequence (Seq)
 import qualified Data.Sequence as Seq
 import           Data.String
@@ -204,7 +205,7 @@ import           Text.Printf
 -- This is meant as a bare-minimum of safety and convenience.
 newtype Query =
   Query (Seq Part)
-  deriving (Monoid, Eq, Show, Typeable, Ord, Generic, Data)
+  deriving (Monoid, Eq, Show, Typeable, Ord, Generic, Data, Semigroup)
 
 instance NFData Query
 
@@ -339,7 +340,7 @@ renderQuery (Query ps) = (renderParts (toList ps))
 
 -- | Stream results like a fold with the option to stop at any time.
 stream ::
-     (MonadIO m, MonadUnliftIO m, FromRow row)
+     (MonadUnliftIO m, FromRow row)
   => Connection -- ^ A connection to the database.
   -> Query -- ^ SQL query.
   -> (state -> row -> m (Internal.Step state))
