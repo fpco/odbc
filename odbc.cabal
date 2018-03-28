@@ -29,7 +29,7 @@ library
   c-sources:         cbits/odbc.c
   include-dirs:      cbits
   build-depends:
-    base > 4.9.0.0 && < 5,
+    base >= 4.9.0.0 && < 5,
     deepseq,
     async,
     bytestring,

@@ -437,7 +437,10 @@ showText :: Text -> Text
 showText t = "N'" <> t <> "'"
 
 validTextChar :: Char -> Bool
-validTextChar = \c -> c /= '\'' && c /= '\n' && c /= '\r'
+validTextChar =
+  \c -> c /= '\'' && c /= '\n' && c /= '\r' && doesNotExceedWideChar c
+  where
+    doesNotExceedWideChar c = c < toEnum (fromIntegral (maxBound :: Word16))
 
 --------------------------------------------------------------------------------
 -- Constants

@@ -245,11 +245,15 @@ class ToSql a where
 instance ToSql Value where
   toSql = Query . Seq.fromList . pure . ValuePart
 
--- | Corresponds to NTEXT (Unicode) of SQL Server.
+-- | Corresponds to NTEXT (Unicode) of SQL Server. Note that if your
+-- character exceeds the range supported by a wide-char (16-bit), that
+-- cannot be sent to the server.
 instance ToSql Text where
   toSql = toSql . TextValue
 
--- | Corresponds to NTEXT (Unicode) of SQL Server.
+-- | Corresponds to NTEXT (Unicode) of SQL Server. Note that if your
+-- character exceeds the range supported by a wide-char (16-bit), that
+-- cannot be sent to the server.
 instance ToSql LT.Text where
   toSql = toSql . TextValue . LT.toStrict
 
