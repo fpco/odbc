@@ -115,7 +115,7 @@ pre, code, kbd, samp, tt, .src {
 }
 
 * + h1, * + h2, * + h3, * + h4, * + h5, * + h6 {
-  margin-top: 2em;
+  margin-top: 1em;
 }
 
 h1 + h2, h2 + h3, h3 + h4, h4 + h5, h5 + h6 {

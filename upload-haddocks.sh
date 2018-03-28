@@ -2,7 +2,7 @@
 set -xe
 STACKVER=$(cat $1.cabal|grep '^version:'|head -1|awk '{print $2}')
 STACKDOCDIR=$1-$STACKVER-docs
-stack haddock --haddock-arguments "--theme doc/"
+stack haddock --haddock-arguments "--theme doc/" --force-dirty
 sh doc/patch.sh
 rm -rf _release/$STACKDOCDIR
 mkdir -p _release
