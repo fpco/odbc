@@ -1,4 +1,9 @@
 #!/usr/bin/env bash
+if [ "$1" == "" ]; then
+echo "Need a package name."
+exit
+fi
+
 set -xe
 STACKVER=$(cat $1.cabal|grep '^version:'|head -1|awk '{print $2}')
 STACKDOCDIR=$1-$STACKVER-docs
