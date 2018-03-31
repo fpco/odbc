@@ -109,6 +109,7 @@ conversionTo = do
   quickCheckRoundtrip @Text "Text" "ntext"
   quickCheckRoundtrip @Text "Text" ("nvarchar(" <> (show maxStringLen) <> ")")
   quickCheckRoundtrip @ByteString "ByteString" "text"
+  quickCheckRoundtrip @TestChar "ByteString" ("char(" <>  (show maxStringLen) <> ")")
   quickCheckRoundtrip @ByteString "ByteString" ("varchar(" <>  (show maxStringLen) <> ")")
   quickCheckRoundtrip @TestBinary "ByteString" ("binary(" <>  (show maxStringLen) <> ")")
   quickCheckRoundtrip @Binary "ByteString" ("varbinary(" <>  (show maxStringLen) <> ")")
@@ -493,6 +494,25 @@ instance Arbitrary TestBinary where
       (TestBinary
          (SQLServer.Binary
             (S.take maxStringLen (bytes <> S.replicate maxStringLen 0))))
+
+newtype TestChar = TestChar ByteString
+  deriving (Show, Eq, Ord, SQLServer.ToSql, FromValue)
+
+instance Arbitrary TestChar where
+  arbitrary = do
+    t <-
+      fmap
+        (S8.filter (\c -> isAscii c && validTextChar c) .
+         S8.pack . take maxStringLen)
+        arbitrary
+    pure
+      (TestChar
+         (S.take
+            maxStringLen
+            ((if S.null t
+                then "a"
+                else t) <>
+             S8.replicate maxStringLen ' ')))
 
 instance Arbitrary Day where
   arbitrary = do
