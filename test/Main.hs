@@ -102,6 +102,7 @@ conversionTo = do
   quickCheckRoundtrip @TestTimeOfDay "TimeOfDay" "time"
   quickCheckRoundtrip @Float "Float" "real"
   quickCheckRoundtrip @Double "Double" "float"
+  quickCheckRoundtrip @Decimal "Double" ("decimal(" <> show decimalPrecision <> ", " <> show decimalScale <> ")")
   quickCheckRoundtrip @Double "Float" "float"
   quickCheckRoundtrip @Word8 "Word8" "tinyint"
   quickCheckRoundtrip @Int "Int" "bigint"
@@ -494,6 +495,38 @@ instance Arbitrary TestBinary where
       (TestBinary
          (SQLServer.Binary
             (S.take maxStringLen (bytes <> S.replicate maxStringLen 0))))
+
+-- | The maximum total number of decimal digits that will be stored,
+-- both to the left and to the right of the decimal point. The
+-- precision must be a value from 1 through the maximum precision of
+-- 38. The default precision is 18.
+decimalPrecision :: Int
+decimalPrecision = 20
+
+-- | The number of decimal digits that will be stored to the right of
+-- the decimal point. This number is subtracted from p to determine
+-- the maximum number of digits to the left of the decimal point. The
+-- maximum number of decimal digits that can be stored to the right of
+-- the decimal point. Scale must be a value from 0 through p. Scale
+-- can be specified only if precision is specified. The default scale
+-- is 0; therefore, 0 <= s <= p. Maximum storage sizes vary, based on
+-- the precision.
+decimalScale :: Int
+decimalScale = 10
+
+newtype Decimal = Decimal Double
+  deriving (Show, Eq, Ord, SQLServer.ToSql, FromValue)
+
+instance Arbitrary Decimal where
+  arbitrary = do
+    left :: Int <- choose (minBound,maxBound)
+    right :: Int <- choose (minBound,maxBound)
+    pure
+      (Decimal
+         (read (take leftLen (show left) ++ "." ++ take rightLen (show (abs right)))))
+    where
+      leftLen = decimalPrecision - decimalScale
+      rightLen = decimalScale
 
 newtype TestChar = TestChar ByteString
   deriving (Show, Eq, Ord, SQLServer.ToSql, FromValue)
