@@ -433,6 +433,7 @@ getData :: Ptr EnvAndDbc -> SQLHSTMT s -> SQLUSMALLINT -> Column -> IO (Maybe Va
 getData dbc stmt i col =
   if | colType == sql_longvarchar -> getBytesData dbc stmt i
      | colType == sql_varchar -> getBytesData dbc stmt i
+     | colType == sql_char -> getBytesData dbc stmt i
      | colType == sql_wvarchar -> getTextData dbc stmt i
      | colType == sql_wlongvarchar -> getTextData dbc stmt i
      | colType == sql_binary -> getBinaryData dbc stmt i
@@ -462,6 +463,18 @@ getData dbc stmt i col =
             mlen <-
               getTypedData dbc stmt sql_c_double i (coerce floatPtr) (SQLLEN 8)
             -- SQLFLOAT is covered by SQL_C_DOUBLE: https://docs.microsoft.com/en-us/sql/odbc/reference/appendixes/c-data-types
+            -- Float is 8 bytes: https://technet.microsoft.com/en-us/library/ms172424(v=sql.110).aspx
+            case mlen of
+              Nothing -> pure Nothing
+              Just {} -> do
+                !d <- fmap DoubleValue (peek floatPtr)
+                pure (Just d))
+     | colType == sql_decimal ->
+       withMalloc
+         (\floatPtr -> do
+            mlen <-
+              getTypedData dbc stmt sql_c_double i (coerce floatPtr) (SQLLEN 8)
+            -- SQL_NUMERIC can be read as SQLFLOAT
             -- Float is 8 bytes: https://technet.microsoft.com/en-us/library/ms172424(v=sql.110).aspx
             case mlen of
               Nothing -> pure Nothing
@@ -956,8 +969,8 @@ sql_char = 1
 -- sql_numeric :: SQLSMALLINT
 -- sql_numeric = 2
 
--- sql_decimal :: SQLSMALLINT
--- sql_decimal = 3
+sql_decimal :: SQLSMALLINT
+sql_decimal = 3
 
 sql_integer :: SQLSMALLINT
 sql_integer = 4
