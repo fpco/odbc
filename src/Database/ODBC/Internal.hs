@@ -433,6 +433,7 @@ getData :: Ptr EnvAndDbc -> SQLHSTMT s -> SQLUSMALLINT -> Column -> IO (Maybe Va
 getData dbc stmt i col =
   if | colType == sql_longvarchar -> getBytesData dbc stmt i
      | colType == sql_varchar -> getBytesData dbc stmt i
+     | colType == sql_char -> getBytesData dbc stmt i
      | colType == sql_wvarchar -> getTextData dbc stmt i
      | colType == sql_wlongvarchar -> getTextData dbc stmt i
      | colType == sql_binary -> getBinaryData dbc stmt i
