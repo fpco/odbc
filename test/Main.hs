@@ -102,6 +102,7 @@ conversionTo = do
   quickCheckRoundtrip @TestTimeOfDay "TimeOfDay" "time"
   quickCheckRoundtrip @Float "Float" "real"
   quickCheckRoundtrip @Double "Double" "float"
+  quickCheckRoundtrip @Double "Double" "decimal"
   quickCheckRoundtrip @Double "Float" "float"
   quickCheckRoundtrip @Word8 "Word8" "tinyint"
   quickCheckRoundtrip @Int "Int" "bigint"

@@ -484,6 +484,18 @@ getData dbc stmt i col =
                     (FloatValue . (realToFrac :: Double -> Float))
                     (peek floatPtr)
                 pure (Just d))
+     | colType == sql_decimal ->
+       withMalloc
+         (\floatPtr -> do
+            mlen <-
+              getTypedData dbc stmt sql_c_double i (coerce floatPtr) (SQLLEN 8)
+            -- NUMERIC/DECIMAL can be read as FLOAT
+            -- Float is 8 bytes: https://technet.microsoft.com/en-us/library/ms172424(v=sql.110).aspx
+            case mlen of
+              Nothing -> pure Nothing
+              Just {} -> do
+                !d <- fmap DoubleValue (peek floatPtr)
+                pure (Just d))
      | colType == sql_integer ->
        withMalloc
          (\intPtr -> do
@@ -957,8 +969,8 @@ sql_char = 1
 -- sql_numeric :: SQLSMALLINT
 -- sql_numeric = 2
 
--- sql_decimal :: SQLSMALLINT
--- sql_decimal = 3
+sql_decimal :: SQLSMALLINT
+sql_decimal = 3
 
 sql_integer :: SQLSMALLINT
 sql_integer = 4
