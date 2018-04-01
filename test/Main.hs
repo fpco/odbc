@@ -72,6 +72,20 @@ regressions = do
         Internal.exec c "CREATE TABLE wibble (i integer)"
         Internal.exec c "DELETE FROM wibble"
         Internal.close c)
+  it
+    "Internal.exec multiple statements (https://github.com/fpco/odbc/issues/9)"
+    (do c <- connectWithString
+        Internal.exec c "SELECT 1; SELECT 2"
+        Internal.close c)
+  it
+    "Internal.exec error in multiple statements (https://github.com/fpco/odbc/issues/9)"
+    (do c <- connectWithString
+        shouldThrow
+          (Internal.exec c "SELECT 1; SELECT nothing FROM doesntexist")
+          (\case
+             Internal.UnsuccessfulReturnCode "odbc_SQLMoreResults" (-1) _ ->
+               True
+             _ -> False))
 
 -- | Test fields with large data like megabytes of text. Just to check
 -- we don't have some kind of hard limit problem.

@@ -220,7 +220,7 @@ exec conn string =
     (withHDBC
        conn
        "exec"
-       (\dbc -> withExecDirect dbc string (const (pure ()))))
+       (\dbc -> withExecDirect dbc string (fetchAllResults dbc)))
 
 -- | Query and return a list of rows.
 query ::
@@ -285,13 +285,18 @@ withExecDirect dbc string cont =
   withStmt
     dbc
     (\stmt -> do
-       assertSuccessOrNoData
-         dbc
-         "odbc_SQLExecDirectW"
-         (T.useAsPtr
-            string
-            (\wstring len ->
-               odbc_SQLExecDirectW dbc stmt (coerce wstring) (fromIntegral len)))
+       void
+         (assertSuccessOrNoData
+            dbc
+            "odbc_SQLExecDirectW"
+            (T.useAsPtr
+               string
+               (\wstring len ->
+                  odbc_SQLExecDirectW
+                    dbc
+                    stmt
+                    (coerce wstring)
+                    (fromIntegral len))))
        cont stmt)
 
 -- | Run the function with a statement.
@@ -352,6 +357,18 @@ fetchIterator dbc (UnliftIO runInIO) step state0 stmt = do
   if cols > 0
     then loop state0
     else pure state0
+
+-- | Fetch all results from possible multiple statements.
+fetchAllResults :: Ptr EnvAndDbc -> SQLHSTMT s -> IO ()
+fetchAllResults dbc stmt = do
+  retcode <-
+    assertSuccessOrNoData
+      dbc
+      "odbc_SQLMoreResults"
+      (odbc_SQLMoreResults dbc stmt)
+  when
+    (retcode == sql_success || retcode == sql_success_with_info)
+    (fetchAllResults dbc stmt)
 
 -- | Fetch all rows from a statement.
 fetchStatementRows :: Ptr EnvAndDbc -> SQLHSTMT s -> IO [[Maybe Value]]
@@ -760,12 +777,12 @@ assertSuccess dbc label m = do
       throwIO (UnsuccessfulReturnCode label (coerce retcode) string)
 
 -- | Check that the RETCODE is successful or no data.
-assertSuccessOrNoData :: Ptr EnvAndDbc -> String -> IO RETCODE -> IO ()
+assertSuccessOrNoData :: Ptr EnvAndDbc -> String -> IO RETCODE -> IO RETCODE
 assertSuccessOrNoData dbc label m = do
   retcode <- m
   if retcode == sql_success ||
      retcode == sql_success_with_info || retcode == sql_no_data
-    then pure ()
+    then pure retcode
     else do
       ptr <- odbc_error dbc
       string <-
