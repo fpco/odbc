@@ -639,7 +639,7 @@ getData dbc stmt i col =
 -- | Get the column's data as a vector of CHAR.
 getBytesData :: Ptr EnvAndDbc -> SQLHSTMT s -> SQLUSMALLINT -> IO (Maybe Value)
 getBytesData dbc stmt column = do
-  mavailableBytes <- getSize dbc stmt sql_c_char column
+  mavailableBytes <- getSize dbc stmt sql_c_binary column
   case mavailableBytes of
     Just 0 -> pure (Just (ByteStringValue mempty))
     Just availableBytes -> do
@@ -649,7 +649,7 @@ getBytesData dbc stmt column = do
         (getTypedData
            dbc
            stmt
-           sql_c_char
+           sql_c_binary
            column
            (coerce bufferp)
            (SQLLEN (fromIntegral allocBytes)))
@@ -1074,8 +1074,8 @@ sql_bit = (-7)
 sql_c_wchar :: SQLCTYPE
 sql_c_wchar = coerce sql_wchar
 
-sql_c_char :: SQLCTYPE
-sql_c_char = coerce sql_char
+-- sql_c_char :: SQLCTYPE
+-- sql_c_char = coerce sql_char
 
 sql_c_binary :: SQLCTYPE
 sql_c_binary = coerce sql_binary

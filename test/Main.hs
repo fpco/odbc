@@ -12,7 +12,7 @@
 
 -- | Test suite.
 
-module Main where
+module Main (main) where
 
 import           Control.Exception (try, onException, SomeException, catch, throwIO)
 import           Control.Monad
@@ -229,25 +229,11 @@ dataRetrieval = do
        TextValue b -> pure b
        _ -> Nothing)
   quickCheckInternalRoundtrip
-    "ByteString"
-    "text"
-    showBytes
-    (\case
-       ByteStringValue b -> pure b
-       _ -> Nothing)
-  quickCheckInternalRoundtrip
     "Text"
     ("nvarchar(" <> T.pack (show maxStringLen) <> ")")
     showText
     (\case
        TextValue b -> pure b
-       _ -> Nothing)
-  quickCheckInternalRoundtrip
-    "ByteString"
-    ("varchar(" <> T.pack (show maxStringLen) <> ")")
-    showBytes
-    (\case
-       ByteStringValue b -> pure b
        _ -> Nothing)
   quickCheckInternalRoundtrip
     "Bool"
@@ -446,9 +432,6 @@ quickCheckInternalRoundtrip hstype typ shower unpack =
 --------------------------------------------------------------------------------
 -- Helpers
 
-showBytes :: ByteString -> Text
-showBytes t = "'" <> T.pack (S8.unpack t) <> "'"
-
 showText :: Text -> Text
 showText t = "N'" <> t <> "'"
 
@@ -492,7 +475,7 @@ instance Arbitrary Text where
 instance Arbitrary ByteString where
   arbitrary =
     fmap
-      (S8.filter (\c -> isAscii c && validTextChar c) .
+      (S8.filter (\c -> validTextChar c) .
        S8.pack . take maxStringLen)
       arbitrary
 
