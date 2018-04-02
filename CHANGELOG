@@ -1,2 +1,6 @@
+0.0.4:
+	* Improved non-Unicode field support: varchar/text treated as
+	actual binary, not "characters" in the SQL server sense.
+
 0.0.3:
 	* Handle multiple statements in exec call.
