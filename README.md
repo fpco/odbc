@@ -66,6 +66,13 @@ test your connection easily.
 
 ## Common issues
 
+Compilation on Linux/OS X may require a `odbcss.h` header file for type/constant definitions. To get this install the freetds package:
+
+* [Linux example](https://github.com/fpco/odbc/blob/efe81f7c17f5ff4c1cf8937577b32f049c0dd62b/Dockerfile#L15). 
+* On OS X you can use `brew install freetds`.
+
+Windows should already have this file.
+
 If you see an error like this:
 
     [unixODBC][Driver Manager]Can't open lib 'ODBC Driver 13 for SQL Server' : file not found
