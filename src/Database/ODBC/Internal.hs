@@ -211,10 +211,9 @@ close conn =
         maybe (throwIO DatabaseAlreadyClosed) finalizeForeignPtr mstate)
 
 -- | Memory bracket around 'connect' and 'close'.
-withConnect :: MonadIO m =>
-               Text -- ^ An ODBC connection string.
-            -> (Connection -> m a)  -- ^ Program that uses the ODBC connection.
-            -> m a
+withConnect :: Text -- ^ An ODBC connection string.
+            -> (Connection -> IO a)  -- ^ Program that uses the ODBC connection.
+            -> IO a
 withConnect str = bracket (connect str) close    
 
 -- | Execute a statement on the database.
