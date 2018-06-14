@@ -24,6 +24,7 @@ module Database.ODBC.Internal
   ( -- * Connect/disconnect
     connect
   , close
+  , withConnection
   , Connection
     -- * Executing queries
   , exec
@@ -208,6 +209,16 @@ close conn =
         -- regards to safety, the finalizers will take care of closing
         -- the connection and the env.
         maybe (throwIO DatabaseAlreadyClosed) finalizeForeignPtr mstate)
+
+
+-- | Memory bracket around 'connect' and 'close'.
+withConnection :: MonadUnliftIO m =>
+               Text  -- ^ An ODBC connection string.
+            -> (Connection -> m a) -- ^ Program that uses the ODBC connection.
+            -> m a
+withConnection str inner = withRunInIO $ \io ->
+  withBound $ bracket (connect str) close (\h -> io (inner h))
+
 
 -- | Execute a statement on the database.
 exec ::
