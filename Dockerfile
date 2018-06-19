@@ -16,8 +16,3 @@ RUN apt-get update
 RUN ACCEPT_EULA=Y apt-get install msodbcsql17 -y
 RUN apt-get install -y unixodbc-dev freetds-dev locales
 RUN locale-gen en_US.UTF-8
-
-# Install GHC and Haskell build dependencies
-
-ADD fpco/odbc /fpco/odbc
-RUN cd /fpco/odbc && stack setup && stack build --dependencies-only --test --no-run-tests

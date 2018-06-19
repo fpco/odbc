@@ -1,0 +1,3 @@
+stack setup
+stack build --dependencies-only --test --no-run-tests
+sh test/test-ghcs
