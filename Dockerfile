@@ -19,4 +19,5 @@ RUN locale-gen en_US.UTF-8
 
 # Install GHC and Haskell build dependencies
 
-RUN cd fpco/odbc && stack setup && stack build --dependencies-only --test --no-run-tests
+ADD fpco/odbc /fpco/odbc
+RUN cd /fpco/odbc && stack setup && stack build --dependencies-only --test --no-run-tests
