@@ -15,14 +15,6 @@ RUN ACCEPT_EULA=Y apt-get install msodbcsql17 -y
 RUN apt-get install -y unixodbc-dev freetds-dev locales
 RUN locale-gen en_US.UTF-8
 
-# Clone repo
-
-COPY travis_commit.txt travis_commit.txt
-RUN git clone https://github.com/fpco/odbc.git && \
-    cd odbc && \
-    echo Checking out $(cat ../travis_commit.txt) && \
-    git checkout $(cat ../travis_commit.txt)
-
 # Install GHC and Haskell build dependencies
 
 RUN cd odbc && stack setup && stack build --dependencies-only --test --no-run-tests
