@@ -17,4 +17,4 @@ RUN locale-gen en_US.UTF-8
 
 # Install GHC and Haskell build dependencies
 
-RUN cd odbc && stack setup && stack build --dependencies-only --test --no-run-tests
+RUN stack setup && stack build --dependencies-only --test --no-run-tests
