@@ -1,15 +1,14 @@
-{-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE LambdaCase #-}
-{-# LANGUAGE TupleSections #-}
-{-# LANGUAGE DeriveDataTypeable #-}
-{-# LANGUAGE DeriveGeneric #-}
-{-# LANGUAGE BangPatterns #-}
-{-# LANGUAGE ViewPatterns #-}
-{-# LANGUAGE MultiWayIf #-}
+{-# LANGUAGE BangPatterns               #-}
+{-# LANGUAGE DeriveDataTypeable         #-}
+{-# LANGUAGE DeriveGeneric              #-}
+{-# LANGUAGE FlexibleContexts           #-}
+{-# LANGUAGE FlexibleInstances          #-}
+{-# LANGUAGE ForeignFunctionInterface   #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
-{-# LANGUAGE RankNTypes #-}
-{-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE ForeignFunctionInterface #-}
+{-# LANGUAGE LambdaCase                 #-}
+{-# LANGUAGE MultiWayIf                 #-}
+{-# LANGUAGE RankNTypes                 #-}
+{-# LANGUAGE TupleSections              #-}
 
 -- | ODBC database API.
 --
@@ -45,17 +44,17 @@ import           Control.Exception
 import           Control.Monad
 import           Control.Monad.IO.Class
 import           Control.Monad.IO.Unlift
-import           Data.ByteString (ByteString)
-import qualified Data.ByteString.Unsafe as S
+import           Data.ByteString          (ByteString)
+import qualified Data.ByteString.Unsafe   as S
 import           Data.Coerce
 import           Data.Data
 import           Data.Int
 import           Data.String
-import           Data.Text (Text)
-import qualified Data.Text as T
-import qualified Data.Text.Foreign as T
+import           Data.Text                (Text)
+import qualified Data.Text                as T
+import qualified Data.Text.Foreign        as T
 import           Data.Time
-import           Foreign hiding (void)
+import           Foreign                  hiding (void)
 import           Foreign.C
 import           GHC.Generics
 
@@ -147,10 +146,10 @@ data Step a
 
 -- | A column description.
 data Column = Column
-  { columnType :: !SQLSMALLINT
-  , columnSize :: !SQLULEN
+  { columnType   :: !SQLSMALLINT
+  , columnSize   :: !SQLULEN
   , columnDigits :: !SQLSMALLINT
-  , columnNull :: !SQLSMALLINT
+  , columnNull   :: !SQLSMALLINT
   } deriving (Show)
 
 --------------------------------------------------------------------------------
@@ -357,7 +356,7 @@ fetchIterator dbc (UnliftIO runInIO) step state0 stmt = do
                        (zipWith (getData dbc stmt) [SQLUSMALLINT 1 ..] types)
                    !state' <- runInIO (step state row)
                    case state' of
-                     Stop state'' -> pure state''
+                     Stop state''     -> pure state''
                      Continue state'' -> loop state''
               | otherwise ->
                 throwIO
@@ -638,6 +637,7 @@ getData dbc stmt i col =
                      (fmap
                         (\frac -> fromIntegral frac / 1000000000)
                         (odbc_TIMESTAMP_STRUCT_fraction timestampPtr))))))
+     | colType == sql_guid -> getGuid dbc stmt i
      | otherwise ->
        throwIO
          (UnknownDataType
@@ -646,6 +646,24 @@ getData dbc stmt i col =
              in n))
   where
     colType = columnType col
+
+-- | hardcoded size for a GUID value,
+-- https://technet.microsoft.com/en-us/library/ms172424(v=sql.110).aspx
+odbcGuidSize :: Integral a => a
+odbcGuidSize = 16
+
+-- | get a guid as 16 words in a Binary
+getGuid :: Ptr EnvAndDbc -> SQLHSTMT s -> SQLUSMALLINT -> IO (Maybe Value)
+getGuid dbc stmt column = do
+  bufferp <- callocBytes odbcGuidSize
+  void $ getTypedData dbc
+                      stmt
+                      sql_c_binary
+                      column
+                      (coerce bufferp)
+                      (SQLLEN odbcGuidSize)
+  Just . BinaryValue . Binary <$> S.unsafePackMallocCStringLen
+    (bufferp, odbcGuidSize)
 
 -- | Get the column's data as a vector of CHAR.
 getBytesData :: Ptr EnvAndDbc -> SQLHSTMT s -> SQLUSMALLINT -> IO (Maybe Value)
@@ -1076,8 +1094,8 @@ sql_tinyint = (-6)
 sql_bit :: SQLSMALLINT
 sql_bit = (-7)
 
--- sql_guid :: SQLSMALLINT
--- sql_guid = (-11)
+sql_guid :: SQLSMALLINT
+sql_guid = (-11)
 
 --------------------------------------------------------------------------------
 -- C type constants
@@ -1085,8 +1103,8 @@ sql_bit = (-7)
 sql_c_wchar :: SQLCTYPE
 sql_c_wchar = coerce sql_wchar
 
--- sql_c_char :: SQLCTYPE
--- sql_c_char = coerce sql_char
+sql_c_char :: SQLCTYPE
+sql_c_char = coerce sql_char
 
 sql_c_binary :: SQLCTYPE
 sql_c_binary = coerce sql_binary
