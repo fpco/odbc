@@ -3,6 +3,8 @@ MAINTAINER Chris Done
 
 # Haskell system dependencies
 
+RUN pwd
+
 RUN apt-get update && apt-get install -yq --no-install-suggests --no-install-recommends --force-yes -y netbase git ca-certificates xz-utils build-essential curl && curl -sSL https://get.haskellstack.org/ | sh
 
 # ODBC system dependencies
@@ -17,4 +19,4 @@ RUN locale-gen en_US.UTF-8
 
 # Install GHC and Haskell build dependencies
 
-RUN stack setup && stack build --dependencies-only --test --no-run-tests
+RUN cd fpco/odbc && stack setup && stack build --dependencies-only --test --no-run-tests
