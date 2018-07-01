@@ -21,6 +21,7 @@ library
    Database.ODBC.Internal
    Database.ODBC.SQLServer
    Database.ODBC.Conversion
+   Database.ODBC.TH
   default-language:  Haskell2010
   if os(mingw32) || os(win32)
     extra-libraries: odbc32
@@ -39,7 +40,9 @@ library
     containers,
     time,
     semigroups,
-    transformers
+    transformers,
+    template-haskell,
+    parsec
 
 executable odbc
   hs-source-dirs:    app
