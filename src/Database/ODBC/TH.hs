@@ -23,7 +23,7 @@ data Part
 parseParts :: Parser [Part]
 parseParts = many1 (self <|> param <|> part)
   where self = try (SqlPart "$" <$ string "$$") <?> "escaped dollar $$"
-        param = (char '$' *> (ParamName <$> many1 (satisfy isAlphaNum))) <?> "parameter (e.g. $foo123)"
+        param = (char '$' *> (ParamName <$> (many1 (satisfy isAlphaNum)) <?> "variable name (alpha-numeric only)")) <?> "parameter (e.g. $foo123)"
         part = (SqlPart <$> many1 (satisfy (/= '$'))) <?> "SQL code"
 
 
