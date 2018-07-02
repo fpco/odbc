@@ -17,6 +17,7 @@ module Main (main) where
 import           Control.Exception (try, onException, SomeException, catch, throwIO)
 import           Control.Monad
 import           Control.Monad.IO.Class
+import           Data.Bifunctor
 import           Data.ByteString (ByteString)
 import qualified Data.ByteString as S
 import qualified Data.ByteString.Char8 as S8
@@ -36,10 +37,12 @@ import           Database.ODBC.Internal (Value (..), Connection, ODBCException(.
 import qualified Database.ODBC.Internal as Internal
 import           Database.ODBC.SQLServer (ToSql(..))
 import qualified Database.ODBC.SQLServer as SQLServer
+import           Database.ODBC.TH (partsParser, Part(..))
 import           System.Environment
 import           Test.Hspec
 import           Test.QuickCheck
 import           Test.QuickCheck.Monadic
+import qualified Text.Parsec as Parsec
 import           Text.Printf
 
 --------------------------------------------------------------------------------
@@ -59,9 +62,35 @@ spec = do
         describe "Regression tests" regressions
         describe "Data retrieval" dataRetrieval
         describe "Big data" bigData)
+  describe "Database.ODBC.SQLServer" (describe "Conversion to SQL" conversionTo)
+  describe "Database.ODBC.TH" thparser
+
+thparser :: SpecWith ()
+thparser =
   describe
-    "Database.ODBC.SQLServer"
-    (describe "Conversion to SQL" conversionTo)
+    "Parser"
+    (do it
+          "Basic range of syntax"
+          (shouldBe
+             (Parsec.parse partsParser "" "foo $bar3*123 zot '$$12.4' $wibble")
+             (Right
+                [ SqlPart "foo "
+                , ParamName "bar3"
+                , SqlPart "*123 zot '"
+                , SqlPart "$"
+                , SqlPart "12.4' "
+                , ParamName "wibble"
+                ]))
+        it
+          "Incomplete parameter"
+          (shouldBe
+             (first (const ()) (Parsec.parse partsParser "" "foo$"))
+             (Left ()))
+        it
+          "Invalid parameter character"
+          (shouldBe
+             (first (const ()) (Parsec.parse partsParser "" "foo$."))
+             (Left ())))
 
 regressions :: Spec
 regressions = do

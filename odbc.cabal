@@ -59,7 +59,7 @@ executable odbc
 test-suite test
   default-language:  Haskell2010
   type: exitcode-stdio-1.0
-  build-depends: base, text, odbc, hspec, QuickCheck, bytestring, time
+  build-depends: base, text, odbc, hspec, QuickCheck, bytestring, time, parsec
   ghc-options: -threaded
   hs-source-dirs: test
   main-is: Main.hs

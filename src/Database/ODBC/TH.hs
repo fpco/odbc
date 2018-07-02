@@ -3,6 +3,8 @@
 module Database.ODBC.TH
   ( sql
   , sqlFile
+  , partsParser
+  , Part(..)
   ) where
 
 import           Control.DeepSeq
@@ -18,13 +20,18 @@ import           Text.Parsec.String
 data Part
     = SqlPart !String
     | ParamName !String
-    deriving (Show)
+    deriving (Show, Eq)
 
-parseParts :: Parser [Part]
-parseParts = many1 (self <|> param <|> part)
-  where self = try (SqlPart "$" <$ string "$$") <?> "escaped dollar $$"
-        param = (char '$' *> (ParamName <$> (many1 (satisfy isAlphaNum)) <?> "variable name (alpha-numeric only)")) <?> "parameter (e.g. $foo123)"
-        part = (SqlPart <$> many1 (satisfy (/= '$'))) <?> "SQL code"
+partsParser :: Parser [Part]
+partsParser = many1 (self <|> param <|> part)
+  where
+    self = try (SqlPart "$" <$ string "$$") <?> "escaped dollar $$"
+    param =
+      (char '$' *>
+       (ParamName <$>
+        (many1 (satisfy isAlphaNum)) <?> "variable name (alpha-numeric only)")) <?>
+      "parameter (e.g. $foo123)"
+    part = (SqlPart <$> many1 (satisfy (/= '$'))) <?> "SQL code"
 
 
 {- | Allows SQL parameters interpolation from a SQL query. Only 'quoteExp' is
@@ -68,7 +75,7 @@ sqlFile fp = do
 
 buildSqlQuery :: FilePath -> String -> Q Exp
 buildSqlQuery fp input = do
-  case parse parseParts fp input of
+  case parse partsParser fp input of
     Left err    -> fail $ "Parse error in SQL: " <> show err
     Right parts -> pure $ buildExp parts
 
