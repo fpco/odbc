@@ -68,7 +68,7 @@ test your connection easily.
 
 Compilation on Linux/OS X may require a `odbcss.h` header file for type/constant definitions. To get this install the freetds package:
 
-* [Linux example](https://github.com/fpco/odbc/blob/efe81f7c17f5ff4c1cf8937577b32f049c0dd62b/Dockerfile#L15). 
+* [Linux example](https://github.com/fpco/odbc/blob/efe81f7c17f5ff4c1cf8937577b32f049c0dd62b/Dockerfile#L15).
 * On OS X you can use `brew install freetds`.
 
 Windows should already have this file.
@@ -89,3 +89,13 @@ This is a terrible error message. If passing your DSN via a shell
 environment variable or argument, check that your input string isn't
 quoted e.g. `"Driver=.."` instead of `Driver=..` due to silly shell
 scripting quoting issues.
+
+If you see an error like this on OS X with driver version 17,
+
+```
+libc++abi.dylib: terminating with uncaught exception of type
+std::runtime_error: collate_byname::collate_byname failed to construct
+for C/en_AU.UTF-8/C/C/C/C
+```
+
+use driver 13 or [see here for more detail](https://github.com/fpco/odbc/issues/17).
