@@ -638,6 +638,7 @@ getData dbc stmt i col =
                      (fmap
                         (\frac -> fromIntegral frac / 1000000000)
                         (odbc_TIMESTAMP_STRUCT_fraction timestampPtr))))))
+     | colType == sql_guid -> getGuid dbc stmt i
      | otherwise ->
        throwIO
          (UnknownDataType
@@ -646,6 +647,21 @@ getData dbc stmt i col =
              in n))
   where
     colType = columnType col
+
+-- | Get a GUID as a binary value.
+getGuid :: Ptr EnvAndDbc -> SQLHSTMT s -> SQLUSMALLINT -> IO (Maybe Value)
+getGuid dbc stmt column = do
+  bufferp <- callocBytes odbcGuidBytes
+  void
+    (getTypedData
+       dbc
+       stmt
+       sql_c_binary
+       column
+       (coerce bufferp)
+       (SQLLEN odbcGuidBytes))
+  !bs <- S.unsafePackMallocCStringLen (bufferp, odbcGuidBytes)
+  evaluate (Just (BinaryValue (Binary bs)))
 
 -- | Get the column's data as a vector of CHAR.
 getBytesData :: Ptr EnvAndDbc -> SQLHSTMT s -> SQLUSMALLINT -> IO (Maybe Value)
@@ -969,6 +985,11 @@ withCallocBytes n m = bracket (callocBytes n) free m
 --------------------------------------------------------------------------------
 -- SQL constants
 
+-- | hardcoded size for a GUID value,
+-- https://technet.microsoft.com/en-us/library/ms172424(v=sql.110).aspx
+odbcGuidBytes :: Integral a => a
+odbcGuidBytes = 16
+
 -- https://github.com/Microsoft/ODBC-Specification/blob/753d7e714b7eab9eaab4ad6105fdf4267d6ad6f6/Windows/inc/sql.h#L50..L51
 sql_success :: RETCODE
 sql_success = RETCODE 0
@@ -1076,8 +1097,8 @@ sql_tinyint = (-6)
 sql_bit :: SQLSMALLINT
 sql_bit = (-7)
 
--- sql_guid :: SQLSMALLINT
--- sql_guid = (-11)
+sql_guid :: SQLSMALLINT
+sql_guid = (-11)
 
 --------------------------------------------------------------------------------
 -- C type constants

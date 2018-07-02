@@ -128,6 +128,7 @@ conversionTo = do
   quickCheckRoundtrip @ByteString "ByteString" ("varchar(" <>  (show maxStringLen) <> ")")
   quickCheckRoundtrip @TestBinary "ByteString" ("binary(" <>  (show maxStringLen) <> ")")
   quickCheckRoundtrip @Binary "ByteString" ("varbinary(" <>  (show maxStringLen) <> ")")
+  quickCheckRoundtrip @TestGUID "GUID" "uniqueidentifier"
 
 connectivity :: Spec
 connectivity = do
@@ -492,6 +493,17 @@ instance Arbitrary TestBinary where
       (TestBinary
          (SQLServer.Binary
             (S.take maxStringLen (bytes <> S.replicate maxStringLen 0))))
+
+newtype TestGUID = TestGUID Binary
+  deriving (Show, Eq, Ord, SQLServer.ToSql, FromValue)
+
+instance Arbitrary TestGUID where
+  arbitrary = do
+    bytes <- arbitrary
+    pure
+      (TestGUID
+         (SQLServer.Binary
+            (S.take 16 (bytes <> S.replicate maxStringLen 0))))
 
 -- | The maximum total number of decimal digits that will be stored,
 -- both to the left and to the right of the decimal point. The
