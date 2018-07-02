@@ -650,18 +650,19 @@ getData dbc stmt i col =
 
 -- | Get a GUID as a binary value.
 getGuid :: Ptr EnvAndDbc -> SQLHSTMT s -> SQLUSMALLINT -> IO (Maybe Value)
-getGuid dbc stmt column = do
-  bufferp <- callocBytes odbcGuidBytes
-  void
-    (getTypedData
-       dbc
-       stmt
-       sql_c_binary
-       column
-       (coerce bufferp)
-       (SQLLEN odbcGuidBytes))
-  !bs <- S.unsafePackMallocCStringLen (bufferp, odbcGuidBytes)
-  evaluate (Just (BinaryValue (Binary bs)))
+getGuid dbc stmt column =
+  uninterruptibleMask_
+    (do bufferp <- callocBytes odbcGuidBytes
+        void
+          (getTypedData
+             dbc
+             stmt
+             sql_c_binary
+             column
+             (coerce bufferp)
+             (SQLLEN odbcGuidBytes))
+        !bs <- S.unsafePackMallocCStringLen (bufferp, odbcGuidBytes)
+        evaluate (Just (BinaryValue (Binary bs))))
 
 -- | Get the column's data as a vector of CHAR.
 getBytesData :: Ptr EnvAndDbc -> SQLHSTMT s -> SQLUSMALLINT -> IO (Maybe Value)
@@ -669,19 +670,22 @@ getBytesData dbc stmt column = do
   mavailableBytes <- getSize dbc stmt sql_c_binary column
   case mavailableBytes of
     Just 0 -> pure (Just (ByteStringValue mempty))
-    Just availableBytes -> do
-      let allocBytes = availableBytes + 1
-      bufferp <- callocBytes (fromIntegral allocBytes)
-      void
-        (getTypedData
-           dbc
-           stmt
-           sql_c_binary
-           column
-           (coerce bufferp)
-           (SQLLEN (fromIntegral allocBytes)))
-      bs <- S.unsafePackMallocCStringLen (bufferp, fromIntegral availableBytes)
-      evaluate (Just (ByteStringValue bs))
+    Just availableBytes ->
+      uninterruptibleMask_
+        (do let allocBytes = availableBytes + 1
+            bufferp <- callocBytes (fromIntegral allocBytes)
+            void
+              (getTypedData
+                 dbc
+                 stmt
+                 sql_c_binary
+                 column
+                 (coerce bufferp)
+                 (SQLLEN (fromIntegral allocBytes)))
+            bs <-
+              S.unsafePackMallocCStringLen
+                (bufferp, fromIntegral availableBytes)
+            evaluate (Just (ByteStringValue bs)))
     Nothing -> pure Nothing
 
 -- | Get the column's data as raw binary.
@@ -690,19 +694,22 @@ getBinaryData dbc stmt column = do
   mavailableBinary <- getSize dbc stmt sql_c_binary column
   case mavailableBinary of
     Just 0 -> pure (Just (BinaryValue (Binary mempty)))
-    Just availableBinary -> do
-      let allocBinary = availableBinary
-      bufferp <- callocBytes (fromIntegral allocBinary)
-      void
-        (getTypedData
-           dbc
-           stmt
-           sql_c_binary
-           column
-           (coerce bufferp)
-           (SQLLEN (fromIntegral allocBinary)))
-      bs <- S.unsafePackMallocCStringLen (bufferp, fromIntegral availableBinary)
-      evaluate (Just (BinaryValue (Binary bs)))
+    Just availableBinary ->
+      uninterruptibleMask_
+        (do let allocBinary = availableBinary
+            bufferp <- callocBytes (fromIntegral allocBinary)
+            void
+              (getTypedData
+                 dbc
+                 stmt
+                 sql_c_binary
+                 column
+                 (coerce bufferp)
+                 (SQLLEN (fromIntegral allocBinary)))
+            bs <-
+              S.unsafePackMallocCStringLen
+                (bufferp, fromIntegral availableBinary)
+            evaluate (Just (BinaryValue (Binary bs))))
     Nothing -> pure Nothing
 
 -- | Get the column's data as a text string.
