@@ -512,7 +512,7 @@ getData dbc stmt i col =
                     (FloatValue . (realToFrac :: Double -> Float))
                     (peek floatPtr)
                 pure (Just d))
-     | colType == sql_decimal ->
+     | colType == sql_numeric || colType == sql_decimal ->
        withMalloc
          (\floatPtr -> do
             mlen <-
@@ -1022,8 +1022,8 @@ sql_no_total = (-4)
 sql_char :: SQLSMALLINT
 sql_char = 1
 
--- sql_numeric :: SQLSMALLINT
--- sql_numeric = 2
+sql_numeric :: SQLSMALLINT
+sql_numeric = 2
 
 sql_decimal :: SQLSMALLINT
 sql_decimal = 3

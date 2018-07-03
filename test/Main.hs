@@ -148,6 +148,7 @@ conversionTo = do
   quickCheckRoundtrip @Float "Float" "real"
   quickCheckRoundtrip @Double "Double" "float"
   quickCheckRoundtrip @Decimal "Double" ("decimal(" <> show decimalPrecision <> ", " <> show decimalScale <> ")")
+  quickCheckRoundtrip @Decimal "Double" ("numeric(" <> show decimalPrecision <> ", " <> show decimalScale <> ")")
   quickCheckRoundtrip @Double "Float" "float"
   quickCheckRoundtrip @Word8 "Word8" "tinyint"
   quickCheckRoundtrip @Int "Int" "bigint"
