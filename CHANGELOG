@@ -1,3 +1,7 @@
+0.1.0:
+	* Removed instance of ToSql for LocalTime, added two new
+	newtypes: Datetime2 and Smalldatetime.
+
 0.0.4:
 	* Improved non-Unicode field support: varchar/text treated as
 	actual binary, not "characters" in the SQL server sense.
