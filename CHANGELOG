@@ -1,3 +1,7 @@
+0.1.1:
+	* Fix Smalldatetime ToSql instance to set seconds to 0.
+	* Add support for numeric.
+
 0.1.0:
 	* Removed instance of ToSql for LocalTime, added two new
 	newtypes: Datetime2 and Smalldatetime.

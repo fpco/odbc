@@ -5,11 +5,11 @@ description: Haskell binding to the ODBC API. This has been tested
              suite runs on OS X, Windows and Linux.
 copyright: FP Complete 2018
 maintainer: chrisdone@fpcomplete.com
-version:             0.1.0
+version:             0.1.1
 license:             BSD3
 license-file:        LICENSE
 build-type:          Simple
-extra-source-files:  README.md doc/style.css doc/patch.sh doc/init.js doc/highlight.pack.js
+extra-source-files:  README.md CHANGELOG doc/style.css doc/patch.sh doc/init.js doc/highlight.pack.js
 cabal-version:       >=1.10
 homepage:            https://github.com/fpco/odbc
 
