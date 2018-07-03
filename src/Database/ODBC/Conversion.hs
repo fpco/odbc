@@ -24,116 +24,95 @@ import           Database.ODBC.Internal
 
 -- | Convert from a 'Value' to a regular Haskell value.
 class FromValue a where
-  fromValue :: Maybe Value -> Either String a
+  fromValue :: Value -> Either String a
   -- ^ The 'String' is used for a helpful error message.
-
--- | Expect a value to be non-null.
-withNonNull ::
-     (Value -> Either String a) -> Maybe Value -> Either String a
-withNonNull f =
-  \case
-    Nothing -> Left "Unexpected NULL for value"
-    Just v -> f v
 
 instance FromValue a => FromValue (Maybe a) where
   fromValue =
     \case
-      Nothing -> pure Nothing
-      Just v -> fmap Just (fromValue (Just v))
+      NullValue -> pure Nothing
+      v -> fmap Just (fromValue v)
 
 instance FromValue Value where
-  fromValue = withNonNull pure
+  fromValue = pure
 
 instance FromValue Text where
   fromValue =
-    withNonNull
-      (\case
-         TextValue x -> pure (id x)
-         v -> Left ("Expected Text, but got: " ++ show v))
+    (\case
+       TextValue x -> pure (id x)
+       v -> Left ("Expected Text, but got: " ++ show v))
 
 instance FromValue LT.Text where
   fromValue =
-    withNonNull
-      (\case
-         TextValue x -> pure (LT.fromStrict x)
-         v -> Left ("Expected Text, but got: " ++ show v))
+    (\case
+       TextValue x -> pure (LT.fromStrict x)
+       v -> Left ("Expected Text, but got: " ++ show v))
 
 instance FromValue ByteString where
   fromValue =
-    withNonNull
-      (\case
-         ByteStringValue x -> pure (id x)
-         v -> Left ("Expected ByteString, but got: " ++ show v))
+    (\case
+       ByteStringValue x -> pure (id x)
+       v -> Left ("Expected ByteString, but got: " ++ show v))
 
 instance FromValue Binary where
   fromValue =
-    withNonNull
-      (\case
-         BinaryValue x -> pure (id x)
-         v -> Left ("Expected Binary, but got: " ++ show v))
+    (\case
+       BinaryValue x -> pure (id x)
+       v -> Left ("Expected Binary, but got: " ++ show v))
 
 instance FromValue L.ByteString where
   fromValue =
-    withNonNull
-      (\case
-         ByteStringValue x -> pure (L.fromStrict x)
-         v -> Left ("Expected ByteString, but got: " ++ show v))
+    (\case
+       ByteStringValue x -> pure (L.fromStrict x)
+       v -> Left ("Expected ByteString, but got: " ++ show v))
 
 instance FromValue Int where
   fromValue =
-    withNonNull
-      (\case
-         IntValue x -> pure (id x)
-         v -> Left ("Expected Int, but got: " ++ show v))
+    (\case
+       IntValue x -> pure (id x)
+       v -> Left ("Expected Int, but got: " ++ show v))
 
 instance FromValue Double where
   fromValue =
-    withNonNull
-      (\case
-         DoubleValue x -> pure (id x)
-         v -> Left ("Expected Double, but got: " ++ show v))
+    (\case
+       DoubleValue x -> pure (id x)
+       v -> Left ("Expected Double, but got: " ++ show v))
 
 instance FromValue Float where
   fromValue =
-    withNonNull
-      (\case
-         FloatValue x -> pure (realToFrac x)
-         v -> Left ("Expected Float, but got: " ++ show v))
+    (\case
+       FloatValue x -> pure (realToFrac x)
+       v -> Left ("Expected Float, but got: " ++ show v))
 
 instance FromValue Word8 where
   fromValue =
-    withNonNull
-      (\case
-         ByteValue x -> pure x
-         v -> Left ("Expected Byte, but got: " ++ show v))
+    (\case
+       ByteValue x -> pure x
+       v -> Left ("Expected Byte, but got: " ++ show v))
 
 instance FromValue Bool where
   fromValue =
-    withNonNull
-      (\case
-         BoolValue x -> pure (id x)
-         v -> Left ("Expected Bool, but got: " ++ show v))
+    (\case
+       BoolValue x -> pure (id x)
+       v -> Left ("Expected Bool, but got: " ++ show v))
 
 instance FromValue Day where
   fromValue =
-    withNonNull
-      (\case
-         DayValue x -> pure (id x)
-         v -> Left ("Expected Day, but got: " ++ show v))
+    (\case
+       DayValue x -> pure (id x)
+       v -> Left ("Expected Day, but got: " ++ show v))
 
 instance FromValue TimeOfDay where
   fromValue =
-    withNonNull
-      (\case
-         TimeOfDayValue x -> pure (id x)
-         v -> Left ("Expected TimeOfDay, but got: " ++ show v))
+    (\case
+       TimeOfDayValue x -> pure (id x)
+       v -> Left ("Expected TimeOfDay, but got: " ++ show v))
 
 instance FromValue LocalTime where
   fromValue =
-    withNonNull
-      (\case
-         LocalTimeValue x -> pure (id x)
-         v -> Left ("Expected LocalTime, but got: " ++ show v))
+    (\case
+       LocalTimeValue x -> pure (id x)
+       v -> Left ("Expected LocalTime, but got: " ++ show v))
 
 --------------------------------------------------------------------------------
 -- Producing rows
@@ -144,9 +123,10 @@ instance FromValue LocalTime where
 -- e.g. @[Maybe Value]@ if you don't know what you're dealing with, or
 -- a tuple e.g. @(Text, Int, Bool)@.
 class FromRow r where
-  fromRow :: [Maybe Value] -> Either String r
+  fromRow :: [Value] -> Either String r
 
 instance FromValue v => FromRow (Maybe v) where
+  fromRow [NullValue] = Right Nothing
   fromRow [v] = fromValue v
   fromRow _ = Left "Unexpected number of fields in row"
 
@@ -154,7 +134,7 @@ instance FromValue v => FromRow (Identity v) where
   fromRow [v] = fmap Identity (fromValue v)
   fromRow _ = Left "Unexpected number of fields in row"
 
-instance FromRow [Maybe Value] where
+instance FromRow [Value] where
   fromRow = pure
 
 instance FromRow Value where

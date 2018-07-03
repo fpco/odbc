@@ -1,3 +1,6 @@
+{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE GADTs #-}
+{-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE BangPatterns #-}
@@ -160,7 +163,7 @@ conversionTo = do
   quickCheckRoundtrip @ByteString "ByteString" ("varchar(" <>  (show maxStringLen) <> ")")
   quickCheckRoundtrip @TestBinary "ByteString" ("binary(" <>  (show maxStringLen) <> ")")
   quickCheckRoundtrip @Binary "ByteString" ("varbinary(" <>  (show maxStringLen) <> ")")
-  quickCheckRoundtrip @TestGUID "GUID" "uniqueidentifier"
+  quickCheckRoundtripEx @TestGUID False "GUID" "uniqueidentifier"
 
 connectivity :: Spec
 connectivity = do
@@ -201,19 +204,19 @@ dataRetrieval = do
         Internal.close c
         shouldBe
           rows
-          [ [ Just (IntValue 123)
-            , Just (ByteStringValue "abc")
-            , Just (BoolValue True)
-            , Just (TextValue "wib")
-            , Just (DoubleValue 2.415)
+          [ [  (IntValue 123)
+            ,  (ByteStringValue "abc")
+            ,  (BoolValue True)
+            ,  (TextValue "wib")
+            ,  (DoubleValue 2.415)
             ]
-          , [ Just (IntValue 456)
-            , Just (ByteStringValue "def")
-            , Just (BoolValue False)
-            , Just (TextValue "wibble")
-            , Just (DoubleValue 0.9999999999999)
+          , [  (IntValue 456)
+            ,  (ByteStringValue "def")
+            ,  (BoolValue False)
+            ,  (TextValue "wibble")
+            ,  (DoubleValue 0.9999999999999)
             ]
-          , [Nothing, Nothing, Nothing, Nothing, Nothing]
+          , [NullValue, NullValue, NullValue, NullValue, NullValue]
           ])
   it
     "Querying commands with no results"
@@ -301,11 +304,20 @@ roundtrip why l typ input =
         shouldBe result input)
 
 quickCheckRoundtrip ::
-     forall t. (Arbitrary t, Eq t, Show t, ToSql t, FromValue t)
+     forall t. (Arbitrary t, Eq t, Show t, ToSql t, FromValue t, ToSql (Maybe t))
   => String
   -> String
   -> Spec
-quickCheckRoundtrip l typ =
+quickCheckRoundtrip = quickCheckRoundtripEx @t True
+
+quickCheckRoundtripEx ::
+     forall t.
+     (Arbitrary t, Eq t, Show t, ToSql t, FromValue t, ToSql (Maybe t))
+  => Bool
+  -> String
+  -> String
+  -> Spec
+quickCheckRoundtripEx testMaybes l typ =
   beforeAll
     (do c <- connectWithString
         SQLServer.exec c "DROP TABLE IF EXISTS test"
@@ -313,44 +325,66 @@ quickCheckRoundtrip l typ =
         pure c)
     (afterAll
        SQLServer.close
-       (it
-          ("QuickCheck roundtrip: HS=" <> l <> ", SQL=" <> typ)
-          (\c ->
-             property
-               (\input ->
-                  monadicIO
-                    (do SQLServer.exec c "TRUNCATE TABLE test"
-                        let q =
-                              "INSERT INTO test VALUES (" <> toSql (input :: t) <>
-                              ")"
-                        liftIO
-                          (catch
-                             (SQLServer.exec c q)
-                             (\e -> do
-                                print (e :: SomeException)
-                                T.putStrLn (SQLServer.renderQuery q)
-                                SQLServer.close c
-                                throwIO e))
-                        [Identity result] <-
-                          SQLServer.query c "SELECT f FROM test"
-                        when
-                          (result /= input)
-                          (liftIO
-                             (putStr
-                                (unlines
-                                   [ "Expected: " ++ show input
-                                   , "Actual: " ++ show result
-                                   , "Query was: " ++ show q
-                                   ])))
-                        monitor
-                          (counterexample
-                             (unlines
-                                [ "Expected: " ++ show input
-                                , "Actual: " ++ show result
-                                , "Query was: " ++
-                                  T.unpack (SQLServer.renderQuery q)
-                                ]))
-                        assert (result == input))))))
+       (let makeIt ::
+                 forall t'.
+                 ( Arbitrary t'
+                 , Show t'
+                 , ToSql t'
+                 , FromValue t'
+                 , Eq t'
+                 , ToSql (Maybe t')
+                 )
+              => String
+              -> String
+              -> (t -> t')
+              -> SpecWith Connection
+            makeIt l' typ' f =
+              it
+                ("QuickCheck roundtrip: HS=" <> l' <> ", SQL=" <> typ')
+                (\c ->
+                   property
+                     (\(f -> input) ->
+                        monadicIO
+                          (do SQLServer.exec c "TRUNCATE TABLE test"
+                              let q =
+                                    "INSERT INTO test VALUES (" <> toSql input <>
+                                    ")"
+                              liftIO
+                                (catch
+                                   (SQLServer.exec c q)
+                                   (\e -> do
+                                      print (e :: SomeException)
+                                      T.putStrLn (SQLServer.renderQuery q)
+                                      SQLServer.close c
+                                      throwIO e))
+                              [Identity result] <-
+                                SQLServer.query c "SELECT f FROM test"
+                              when
+                                (result /= input)
+                                (liftIO
+                                   (putStr
+                                      (unlines
+                                         [ "Expected: " ++ show input
+                                         , "Actual: " ++ show result
+                                         , "Query was: " ++ show q
+                                         ])))
+                              monitor
+                                (counterexample
+                                   (unlines
+                                      [ "Expected: " ++ show input
+                                      , "Actual: " ++ show result
+                                      , "Query was: " ++
+                                        T.unpack (SQLServer.renderQuery q)
+                                      ]))
+                              assert (result == input))))
+         in do makeIt l typ id
+               when
+                 testMaybes
+                 (do makeIt ("Maybe " ++ l) typ Just
+                     makeIt
+                       ("Maybe " ++ l)
+                       (typ ++ " (NULL)")
+                       (const Nothing :: a -> Maybe a))))
 
 quickCheckOneway ::
      forall t. (Arbitrary t, Eq t, Show t, ToSql t, FromValue t)
@@ -434,7 +468,7 @@ quickCheckInternalRoundtrip hstype typ shower unpack =
                             result :: Either String t
                             result =
                               case rows of
-                                Right [[Just x]] ->
+                                Right [[x]] ->
                                   case unpack x of
                                     Nothing -> Left "Couldn't unpack value."
                                     Just v -> pure v

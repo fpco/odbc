@@ -106,7 +106,7 @@ import           GHC.TypeLits
 --   exec conn "DROP TABLE IF EXISTS example"
 --   exec conn "CREATE TABLE example (id int, name ntext, likes_tacos bit)"
 --   exec conn "INSERT INTO example VALUES (1, \'Chris\', 0), (2, \'Mary\', 1)"
---   rows <- query conn "SELECT * FROM example" :: IO [[Maybe Value]]
+--   rows <- query conn "SELECT * FROM example" :: IO [[Value]]
 --   print rows
 --   rows2 <- query conn "SELECT * FROM example" :: IO [(Int,Text,Bool)]
 --   print rows2
@@ -123,7 +123,7 @@ import           GHC.TypeLits
 -- The output of this program for @rows@:
 --
 -- @
--- [[Just (IntValue 1),Just (TextValue \"Chris\"),Just (BoolValue False)],[Just (IntValue 2),Just (TextValue \"Mary\"),Just (BoolValue True)]]
+-- [[IntValue 1, TextValue \"Chris\", BoolValue False],[ IntValue 2, TextValue \"Mary\", BoolValue True]]
 -- @
 --
 -- The output for @rows2@:
@@ -186,16 +186,12 @@ import           GHC.TypeLits
 --          stream
 --            conn
 --            \"SELECT * FROM example\"
---            (\\longest mtext ->
+--            (\\longest text ->
 --               pure
 --                 (Continue
---                    (maybe
---                       longest
---                       (\\text ->
---                          if T.length text > T.length longest
---                            then text
---                            else longest)
---                       mtext)))
+--                    (if T.length text > T.length longest
+--                        then text
+--                        else longest)))
 --            \"\"
 --        print longest)
 -- @
@@ -271,6 +267,9 @@ newtype Smalldatetime = Smalldatetime
 --
 class ToSql a where
   toSql :: a -> Query
+
+instance ToSql a => ToSql (Maybe a) where
+  toSql = maybe (Query (Seq.fromList [ValuePart NullValue])) toSql
 
 -- | Converts whatever the 'Value' is to SQL.
 instance ToSql Value where
@@ -444,6 +443,7 @@ renderPart =
 renderValue :: Value -> Text
 renderValue =
   \case
+    NullValue -> "NULL"
     TextValue t -> "(N'" <> T.concatMap escapeChar t <> "')"
     BinaryValue (Internal.Binary bytes) ->
       "0x" <>

@@ -45,11 +45,12 @@ repl c = do
       putStr "> "
       catch (fmap Just T.getLine) (\(_ :: IOException) -> pure Nothing)
     output count row = do
-      putStrLn (intercalate ", " (map (maybe "NULL" showColumn) row))
+      putStrLn (intercalate ", " (map showColumn row))
       pure (ODBC.Continue (count + 1))
       where
         showColumn =
           \case
+            ODBC.NullValue -> "NULL"
             ODBC.TextValue t -> show t
             ODBC.ByteStringValue bs -> show bs
             ODBC.BinaryValue bs -> show bs
