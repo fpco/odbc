@@ -16,7 +16,7 @@ for i in $(ls $(stack path --local-doc-root)/$1-$STACKVER/*.html); do sed -i.bak
 
 
 cp -r $(stack path --local-doc-root)/$1-$STACKVER _release/$STACKDOCDIR
-sed -i '' 's/href="\.\.\/\([^/]*\)\//href="..\/..\/\1\/docs\//g' _release/$STACKDOCDIR/*.html
+sed -i 's/href="\.\.\/\([^/]*\)\//href="..\/..\/\1\/docs\//g' _release/$STACKDOCDIR/*.html
 (cd _release && tar cvz --format=ustar -f $STACKDOCDIR.tar.gz $STACKDOCDIR)
 
 curl -X PUT \

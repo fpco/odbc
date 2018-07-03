@@ -233,7 +233,7 @@ instance NFData Part
 instance IsString Part where
   fromString = TextPart . T.pack
 
--- The 'LocalTime' type has more accuracy than the @datetime@ type and
+-- | The 'LocalTime' type has more accuracy than the @datetime@ type and
 -- the @datetime2@ types can hold; so you will lose precision when you
 -- insert. Use this type to indicate that you are aware of the
 -- precision loss and fine with it.
@@ -246,7 +246,7 @@ newtype Datetime2 = Datetime2
   { unDatetime2 :: LocalTime
   } deriving (Eq, Ord, Show, Typeable, Generic, Data, FromValue)
 
--- Use this type to discard higher precision than seconds in your
+-- | Use this type to discard higher precision than seconds in your
 -- 'LocalTime' values for a schema using @smalldatetime@.
 --
 -- <https://docs.microsoft.com/en-us/sql/t-sql/data-types/smalldatetime-transact-sql?view=sql-server-2017>
