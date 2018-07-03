@@ -140,8 +140,8 @@ conversionTo = do
         roundtrip @Int "minBound(Int16)" "Int" "smallint" (fromIntegral (minBound :: Int16))
         roundtrip @Word8 "minBound(Word8)" "Word8" "tinyint" minBound)
   quickCheckRoundtrip @Day "Day" "date"
-  quickCheckRoundtrip @Datetime2 "LocalTime" "datetime2"
-  quickCheckRoundtrip @Smalldatetime "LocalTime" "datetime2"
+  quickCheckRoundtrip @Datetime2 "Datetime2" "datetime2"
+  quickCheckRoundtrip @Smalldatetime "Smalldatetime" "smalldatetime"
   quickCheckRoundtrip @TestDateTime "TestDateTime" "datetime"
   quickCheckOneway @TimeOfDay "TimeOfDay" "time"
   quickCheckRoundtrip @TestTimeOfDay "TimeOfDay" "time"
@@ -634,4 +634,12 @@ instance Arbitrary TestDateTime where
              (secondsToDiffTime seconds + (fromRational (fractional % 1000))))
 
 deriving instance Arbitrary Datetime2
-deriving instance Arbitrary Smalldatetime
+instance Arbitrary Smalldatetime where
+  arbitrary = do
+    minutes <- choose (0, 1440)
+    day <-
+      do offset <- choose (0, 179)
+         pure (addDays offset (fromGregorian 1900 01 01))
+    pure
+      (Smalldatetime
+         (LocalTime day (timeToTimeOfDay (secondsToDiffTime (minutes * 60)))))

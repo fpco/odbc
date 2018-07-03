@@ -365,7 +365,10 @@ instance ToSql Datetime2 where
 -- | Corresponds to SMALLDATETIME type of SQL Server. Precision up to
 -- seconds, nothing smaller.
 instance ToSql Smalldatetime where
-  toSql = toSql . LocalTimeValue . unSmalldatetime
+  toSql = toSql . LocalTimeValue . shrink . unSmalldatetime
+    where
+      shrink (LocalTime dd (TimeOfDay hh mm _ss)) =
+        LocalTime dd (TimeOfDay hh mm 0)
 
 --------------------------------------------------------------------------------
 -- Top-level functions
