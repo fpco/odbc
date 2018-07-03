@@ -363,7 +363,7 @@ instance ToSql Datetime2 where
   toSql = toSql . LocalTimeValue . unDatetime2
 
 -- | Corresponds to SMALLDATETIME type of SQL Server. Precision up to
--- seconds, nothing smaller.
+-- minutes. Consider the seconds field always 0.
 instance ToSql Smalldatetime where
   toSql = toSql . LocalTimeValue . shrink . unSmalldatetime
     where
