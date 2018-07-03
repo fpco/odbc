@@ -1,3 +1,7 @@
+{-# LANGUAGE TypeOperators #-}
+{-# LANGUAGE UndecidableInstances #-}
+{-# LANGUAGE DataKinds #-}
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE DeriveDataTypeable #-}
@@ -28,6 +32,8 @@ module Database.ODBC.SQLServer
   , FromValue(..)
   , FromRow(..)
   , Internal.Binary(..)
+  , Datetime2(..)
+  , Smalldatetime(..)
 
     -- * Streaming results
     -- $streaming
@@ -75,6 +81,10 @@ import           Formatting ((%))
 import           Formatting.Time as Formatting
 import           GHC.Generics
 import           Text.Printf
+
+#if MIN_VERSION_base(4,9,0)
+import           GHC.TypeLits
+#endif
 
 -- $building
 --
@@ -223,6 +233,27 @@ instance NFData Part
 instance IsString Part where
   fromString = TextPart . T.pack
 
+-- The 'LocalTime' type has more accuracy than the @datetime@ type and
+-- the @datetime2@ types can hold; so you will lose precision when you
+-- insert. Use this type to indicate that you are aware of the
+-- precision loss and fine with it.
+--
+-- <https://docs.microsoft.com/en-us/sql/t-sql/data-types/datetime2-transact-sql?view=sql-server-2017>
+--
+-- If you are using @smalldatetime@ in SQL Server, use instead the
+-- 'Smalldatetime' type.
+newtype Datetime2 = Datetime2
+  { unDatetime2 :: LocalTime
+  } deriving (Eq, Ord, Show, Typeable, Generic, Data, FromValue)
+
+-- Use this type to discard higher precision than seconds in your
+-- 'LocalTime' values for a schema using @smalldatetime@.
+--
+-- <https://docs.microsoft.com/en-us/sql/t-sql/data-types/smalldatetime-transact-sql?view=sql-server-2017>
+newtype Smalldatetime = Smalldatetime
+  { unSmalldatetime :: LocalTime
+  } deriving (Eq, Ord, Show, Typeable, Generic, Data, FromValue)
+
 --------------------------------------------------------------------------------
 -- Conversion to SQL
 
@@ -309,13 +340,32 @@ instance ToSql Day where
 instance ToSql TimeOfDay where
   toSql = toSql . TimeOfDayValue
 
+#if MIN_VERSION_base(4,9,0)
+-- | You cannot use this instance. Wrap your value in either
+-- 'Datetime2' or 'Smalldatetime'.
+instance GHC.TypeLits.TypeError ('GHC.TypeLits.Text "Instance for LocalTime is disabled:" 'GHC.TypeLits.:$$: 'GHC.TypeLits.Text "Wrap your value in either (Datetime2 foo) or (Smalldatetime foo).") =>
+         ToSql LocalTime where
+  toSql = toSql
+
+-- | You cannot use this instance. Wrap your value in either
+-- 'Datetime2' or 'Smalldatetime'.
+instance GHC.TypeLits.TypeError ('GHC.TypeLits.Text "Instance for UTCTime is not possible:" 'GHC.TypeLits.:$$: 'GHC.TypeLits.Text "SQL Server does not support time zones. "'GHC.TypeLits.:$$: 'GHC.TypeLits.Text "You can use utcToLocalTime to make a LocalTime, and" 'GHC.TypeLits.:$$: 'GHC.TypeLits.Text "wrap your value in either (Datetime2 foo) or (Smalldatetime foo).") =>
+         ToSql UTCTime where
+  toSql = toSql
+#endif
+
 -- | Corresponds to DATETIME/DATETIME2 type of SQL Server.
 --
--- The 'LocalTime' type has more accuracy than the @datetime@ type and
+-- The 'Datetime2' type has more accuracy than the @datetime@ type and
 -- the @datetime2@ types can hold; so you will lose precision when you
 -- insert.
-instance ToSql LocalTime where
-  toSql = toSql . LocalTimeValue
+instance ToSql Datetime2 where
+  toSql = toSql . LocalTimeValue . unDatetime2
+
+-- | Corresponds to SMALLDATETIME type of SQL Server. Precision up to
+-- seconds, nothing smaller.
+instance ToSql Smalldatetime where
+  toSql = toSql . LocalTimeValue . unSmalldatetime
 
 --------------------------------------------------------------------------------
 -- Top-level functions

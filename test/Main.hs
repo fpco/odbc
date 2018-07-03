@@ -1,3 +1,4 @@
+{-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE TypeApplications #-}
@@ -35,7 +36,7 @@ import           Data.Word
 import           Database.ODBC.Conversion (FromValue(..))
 import           Database.ODBC.Internal (Value (..), Connection, ODBCException(..), Step(..), Binary)
 import qualified Database.ODBC.Internal as Internal
-import           Database.ODBC.SQLServer (ToSql(..))
+import           Database.ODBC.SQLServer (Datetime2(..), Smalldatetime(..), ToSql(..))
 import qualified Database.ODBC.SQLServer as SQLServer
 import           Database.ODBC.TH (partsParser, Part(..))
 import           System.Environment
@@ -139,7 +140,8 @@ conversionTo = do
         roundtrip @Int "minBound(Int16)" "Int" "smallint" (fromIntegral (minBound :: Int16))
         roundtrip @Word8 "minBound(Word8)" "Word8" "tinyint" minBound)
   quickCheckRoundtrip @Day "Day" "date"
-  quickCheckRoundtrip @LocalTime "LocalTime" "datetime2"
+  quickCheckRoundtrip @Datetime2 "LocalTime" "datetime2"
+  quickCheckRoundtrip @Smalldatetime "LocalTime" "datetime2"
   quickCheckRoundtrip @TestDateTime "TestDateTime" "datetime"
   quickCheckOneway @TimeOfDay "TimeOfDay" "time"
   quickCheckRoundtrip @TestTimeOfDay "TimeOfDay" "time"
@@ -608,7 +610,7 @@ instance Arbitrary LocalTime where
           (timeToTimeOfDay
              (secondsToDiffTime seconds + (fromRational (fractional % 10000000))))
 
-newtype TestDateTime = TestDateTime LocalTime
+newtype TestDateTime = TestDateTime Datetime2
   deriving (Eq, Ord, Show, SQLServer.ToSql, FromValue)
 
 newtype TestTimeOfDay = TestTimeOfDay TimeOfDay
@@ -620,7 +622,7 @@ instance Arbitrary TestTimeOfDay where
     pure (TestTimeOfDay (timeToTimeOfDay (secondsToDiffTime seconds)))
 
 instance Arbitrary TestDateTime where
-  arbitrary = fmap TestDateTime (LocalTime <$> arbitrary <*> arbitraryLimited)
+  arbitrary = fmap (TestDateTime . Datetime2) (LocalTime <$> arbitrary <*> arbitraryLimited)
     where
       arbitraryLimited = do
         fractional <- elements [993, 003, 497, 007, 000, 127] :: Gen Integer
@@ -630,3 +632,6 @@ instance Arbitrary TestDateTime where
         pure
           (timeToTimeOfDay
              (secondsToDiffTime seconds + (fromRational (fractional % 1000))))
+
+deriving instance Arbitrary Datetime2
+deriving instance Arbitrary Smalldatetime
