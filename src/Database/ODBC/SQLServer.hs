@@ -29,6 +29,7 @@ module Database.ODBC.SQLServer
   , Value(..)
   , Query
   , ToSql(..)
+  , rawUnescapedText
   , FromValue(..)
   , FromRow(..)
   , Internal.Binary(..)
@@ -217,6 +218,12 @@ instance NFData Query
 
 instance IsString Query where
   fromString = Query . Seq.fromList . pure . fromString
+
+-- | Do not use for writing your queries. Use when writing instances
+-- of 'ToSql' if you want to efficiently include a 'Text'
+-- value. Subject to SQL injection risk, so be careful.
+rawUnescapedText :: Text -> Query
+rawUnescapedText = Query . Seq.singleton . TextPart
 
 -- | A part of a query.
 data Part
