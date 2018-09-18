@@ -70,12 +70,14 @@ instance FromValue Int where
   fromValue =
     (\case
        IntValue x -> pure (id x)
+       ByteValue x -> pure (fromIntegral x)
        v -> Left ("Expected Int, but got: " ++ show v))
 
 instance FromValue Double where
   fromValue =
     (\case
        DoubleValue x -> pure (id x)
+       FloatValue x -> pure (realToFrac x)
        v -> Left ("Expected Double, but got: " ++ show v))
 
 instance FromValue Float where
