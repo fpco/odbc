@@ -1,3 +1,6 @@
+0.2.3:
+	* Support WCHAR
+
 0.2.2:
 	* Accept smaller int/floats in bigger types
 
