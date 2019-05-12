@@ -141,6 +141,8 @@ data Value
     -- ^ Time of day (hh, mm, ss + fractional) values.
   | LocalTimeValue !LocalTime
     -- ^ Local date and time.
+  | ZonedTimeValue !LocalTime !TimeZone
+    -- ^ Date and time with time zone.
   | NullValue
     -- ^ SQL null value.
   deriving (Eq, Show, Typeable, Ord, Generic, Data)
@@ -773,6 +775,40 @@ getData dbc stmt i col = fmap (col, ) $
                    (fmap fromIntegral (odbc_TIME_STRUCT_hour datePtr)) <*>
                    (fmap fromIntegral (odbc_TIME_STRUCT_minute datePtr)) <*>
                    (fmap fromIntegral (odbc_TIME_STRUCT_second datePtr))))
+     | colType == sql_ss_timestampoffset ->
+       withCallocBytes
+         20
+         (\datePtr -> do
+            mlen <-
+              getTypedData
+                dbc
+                stmt
+                sql_c_binary
+                i
+                (coerce datePtr)
+                (SQLLEN 20)
+            case mlen of
+              Nothing -> pure NullValue
+              Just {} ->
+                liftM2
+                  ZonedTimeValue
+                    (LocalTime <$>
+                      (fromGregorian <$>
+                        (fmap fromIntegral (odbc_TIMESTAMPOFFSET_STRUCT_year datePtr)) <*>
+                        (fmap fromIntegral (odbc_TIMESTAMPOFFSET_STRUCT_month datePtr)) <*>
+                        (fmap fromIntegral (odbc_TIMESTAMPOFFSET_STRUCT_day datePtr))) <*>
+                      (TimeOfDay <$>
+                        (fmap fromIntegral (odbc_TIMESTAMPOFFSET_STRUCT_hour datePtr)) <*>
+                        (fmap fromIntegral (odbc_TIMESTAMPOFFSET_STRUCT_minute datePtr)) <*>
+                        (liftM2 (+)
+                          (fmap fromIntegral (odbc_TIMESTAMPOFFSET_STRUCT_second datePtr))
+                          (fmap ((/ 1000000000) . fromIntegral) (odbc_TIMESTAMPOFFSET_STRUCT_fraction datePtr)))))
+                    (TimeZone <$>
+                      (liftM2 (+)
+                        (fmap ((* 60) . fromIntegral) (odbc_TIMESTAMPOFFSET_STRUCT_timezone_hour datePtr))
+                        (fmap fromIntegral (odbc_TIMESTAMPOFFSET_STRUCT_timezone_minute datePtr))) <*>
+                      pure False <*>
+                      pure ""))
      | colType == sql_type_timestamp ->
        withMallocBytes
          16
@@ -1073,6 +1109,9 @@ data TIME_STRUCT
 -- https://docs.microsoft.com/en-us/sql/odbc/reference/appendixes/c-data-types
 data TIMESTAMP_STRUCT
 
+-- https://docs.microsoft.com/en-us/sql/relational-databases/native-client-odbc-date-time/data-type-support-for-odbc-date-and-time-improvements?view=sql-server-2017
+data TIMESTAMPOFFSET_STRUCT
+
 --------------------------------------------------------------------------------
 -- Foreign functions
 
@@ -1180,6 +1219,33 @@ foreign import ccall "odbc TIMESTAMP_STRUCT_second" odbc_TIMESTAMP_STRUCT_second
 foreign import ccall "odbc TIMESTAMP_STRUCT_fraction" odbc_TIMESTAMP_STRUCT_fraction
   :: Ptr TIMESTAMP_STRUCT -> IO SQLUINTEGER
 
+foreign import ccall "odbc TIMESTAMPOFFSET_STRUCT_year" odbc_TIMESTAMPOFFSET_STRUCT_year
+  :: Ptr TIMESTAMPOFFSET_STRUCT -> IO SQLSMALLINT
+
+foreign import ccall "odbc TIMESTAMPOFFSET_STRUCT_month" odbc_TIMESTAMPOFFSET_STRUCT_month
+  :: Ptr TIMESTAMPOFFSET_STRUCT -> IO SQLUSMALLINT
+
+foreign import ccall "odbc TIMESTAMPOFFSET_STRUCT_day" odbc_TIMESTAMPOFFSET_STRUCT_day
+  :: Ptr TIMESTAMPOFFSET_STRUCT -> IO SQLUSMALLINT
+
+foreign import ccall "odbc TIMESTAMPOFFSET_STRUCT_hour" odbc_TIMESTAMPOFFSET_STRUCT_hour
+  :: Ptr TIMESTAMPOFFSET_STRUCT -> IO SQLUSMALLINT
+
+foreign import ccall "odbc TIMESTAMPOFFSET_STRUCT_minute" odbc_TIMESTAMPOFFSET_STRUCT_minute
+  :: Ptr TIMESTAMPOFFSET_STRUCT -> IO SQLUSMALLINT
+
+foreign import ccall "odbc TIMESTAMPOFFSET_STRUCT_second" odbc_TIMESTAMPOFFSET_STRUCT_second
+  :: Ptr TIMESTAMPOFFSET_STRUCT -> IO SQLUSMALLINT
+
+foreign import ccall "odbc TIMESTAMPOFFSET_STRUCT_fraction" odbc_TIMESTAMPOFFSET_STRUCT_fraction
+  :: Ptr TIMESTAMPOFFSET_STRUCT -> IO SQLUINTEGER
+
+foreign import ccall "odbc TIMESTAMPOFFSET_STRUCT_timezone_hour" odbc_TIMESTAMPOFFSET_STRUCT_timezone_hour
+  :: Ptr TIMESTAMPOFFSET_STRUCT -> IO SQLSMALLINT
+
+foreign import ccall "odbc TIMESTAMPOFFSET_STRUCT_timezone_minute" odbc_TIMESTAMPOFFSET_STRUCT_timezone_minute
+  :: Ptr TIMESTAMPOFFSET_STRUCT -> IO SQLSMALLINT
+
 --------------------------------------------------------------------------------
 -- Foreign utils
 
@@ -1254,6 +1320,10 @@ sql_type_date = 91
 -- https://docs.microsoft.com/en-us/sql/relational-databases/native-client-odbc-date-time/data-type-support-for-odbc-date-and-time-improvements
 sql_ss_time2 :: SQLSMALLINT
 sql_ss_time2 = -154
+
+-- ibid.
+sql_ss_timestampoffset :: SQLSMALLINT
+sql_ss_timestampoffset = -155
 
 -- sql_datetime :: SQLSMALLINT
 -- sql_datetime = 9

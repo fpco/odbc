@@ -56,6 +56,7 @@ executable odbc
     odbc,
     bytestring,
     text,
+    time,
     optparse-applicative
 
 test-suite test

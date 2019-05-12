@@ -347,3 +347,59 @@ SQLUSMALLINT TIMESTAMP_STRUCT_second(TIMESTAMP_STRUCT *t){
 SQLUINTEGER TIMESTAMP_STRUCT_fraction(TIMESTAMP_STRUCT *t){
   return t->fraction;
 }
+
+////////////////////////////////////////////////////////////////////////////////
+// Definition and accessors for SQL_SS_TIMESTAMPOFFSET_STRUCT
+// The strcut definition is from
+// https://docs.microsoft.com/en-us/sql/relational-databases/native-client-odbc-date-time/data-type-support-for-odbc-date-and-time-improvements
+typedef struct tagTIMESTAMPOFFSET_STRUCT {
+  SQLSMALLINT year;
+  SQLUSMALLINT month;
+  SQLUSMALLINT day;
+  SQLUSMALLINT hour;
+  SQLUSMALLINT minute;
+  SQLUSMALLINT second;
+  SQLUINTEGER fraction;
+  SQLSMALLINT timezone_hour;
+  SQLSMALLINT timezone_minute;
+} TIMESTAMPOFFSET_STRUCT;
+
+#if (ODBCVER >= 0x0300)
+  typedef TIMESTAMPOFFSET_STRUCT SQL_SS_TIMESTAMPOFFSET_STRUCT;
+#endif
+
+SQLSMALLINT TIMESTAMPOFFSET_STRUCT_year(TIMESTAMPOFFSET_STRUCT *t){
+  return t->year;
+}
+
+SQLUSMALLINT TIMESTAMPOFFSET_STRUCT_month(TIMESTAMPOFFSET_STRUCT *t){
+  return t->month;
+}
+
+SQLUSMALLINT TIMESTAMPOFFSET_STRUCT_day(TIMESTAMPOFFSET_STRUCT *t){
+  return t->day;
+}
+
+SQLUSMALLINT TIMESTAMPOFFSET_STRUCT_hour(TIMESTAMPOFFSET_STRUCT *t){
+  return t->hour;
+}
+
+SQLUSMALLINT TIMESTAMPOFFSET_STRUCT_minute(TIMESTAMPOFFSET_STRUCT *t){
+  return t->minute;
+}
+
+SQLUSMALLINT TIMESTAMPOFFSET_STRUCT_second(TIMESTAMPOFFSET_STRUCT *t){
+  return t->second;
+}
+
+SQLUINTEGER TIMESTAMPOFFSET_STRUCT_fraction(TIMESTAMPOFFSET_STRUCT *t){
+  return t->fraction;
+}
+
+SQLSMALLINT TIMESTAMPOFFSET_STRUCT_timezone_hour(TIMESTAMPOFFSET_STRUCT *t){
+  return t->timezone_hour;
+}
+
+SQLSMALLINT TIMESTAMPOFFSET_STRUCT_timezone_minute(TIMESTAMPOFFSET_STRUCT *t){
+  return t->timezone_minute;
+}
