@@ -487,6 +487,19 @@ renderValue =
         hh
         mm
         (renderFractional ss)
+    ZonedTimeValue (LocalTime d (TimeOfDay hh mm ss)) tzone ->
+      Formatting.sformat
+        ("'" % Formatting.dateDash % " " % Formatting.left 2 '0' % ":" %
+         Formatting.left 2 '0' %
+         ":" %
+         Formatting.string %
+         Formatting.string %
+         "'")
+        d
+        hh
+        mm
+        (renderFractional ss)
+        (renderTimeZone tzone)
 
 -- | Obviously, this is not fast. But it is correct. A faster version
 -- can be written later.
@@ -497,6 +510,9 @@ renderFractional x = trim (printf "%.7f" (realToFrac x :: Double) :: String)
       reverse (case dropWhile (== '0') (reverse s) of
                  s'@('.':_) -> '0' : s'
                  s' -> s')
+
+renderTimeZone :: TimeZone -> String
+renderTimeZone tzone = if tzone == utc then "Z" else timeZoneOffsetString tzone
 
 -- | A very conservative character escape.
 escapeChar8 :: Word8 -> Text
