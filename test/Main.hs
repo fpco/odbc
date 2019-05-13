@@ -39,7 +39,7 @@ import           Data.Word
 import           Database.ODBC.Conversion (FromValue(..))
 import           Database.ODBC.Internal (Value (..), Connection, ODBCException(..), Step(..), Binary)
 import qualified Database.ODBC.Internal as Internal
-import           Database.ODBC.SQLServer (Datetime2(..), Smalldatetime(..), ToSql(..))
+import           Database.ODBC.SQLServer (Datetime2(..), Smalldatetime(..), Datetimeoffset(..), ToSql(..))
 import qualified Database.ODBC.SQLServer as SQLServer
 import           Database.ODBC.TH (partsParser, Part(..))
 import           System.Environment
@@ -146,6 +146,7 @@ conversionTo = do
   quickCheckRoundtrip @Datetime2 "Datetime2" "datetime2"
   quickCheckRoundtrip @Smalldatetime "Smalldatetime" "smalldatetime"
   quickCheckRoundtrip @TestDateTime "TestDateTime" "datetime"
+  quickCheckRoundtrip @Datetimeoffset "Datetimeoffset" "datetimeoffset"
   quickCheckOneway @TimeOfDay "TimeOfDay" "time"
   quickCheckRoundtrip @TestTimeOfDay "TimeOfDay" "time"
   quickCheckRoundtrip @Float "Float" "real"
@@ -678,3 +679,9 @@ instance Arbitrary Smalldatetime where
     pure
       (Smalldatetime
          (LocalTime day (timeToTimeOfDay (secondsToDiffTime (minutes * 60)))))
+
+instance Arbitrary Datetimeoffset where
+  arbitrary = do
+    lt <- arbitrary
+    offset <- choose (-12 * 60, 14 * 60)
+    return $ Datetimeoffset $ ZonedTime lt $ TimeZone offset False ""
