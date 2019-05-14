@@ -683,5 +683,9 @@ instance Arbitrary Smalldatetime where
 instance Arbitrary Datetimeoffset where
   arbitrary = do
     lt <- arbitrary
+    -- Pick a time zone offset between -12 hours and +14 hours. According to
+    -- https://en.wikipedia.org/wiki/List_of_UTC_time_offsets the lowest offset
+    -- is -12 hours (at Baker Island and Howland Island), while the highest
+    -- offset is +14 hours (at Line Islands).
     offset <- choose (-12 * 60, 14 * 60)
     return $ Datetimeoffset $ ZonedTime lt $ TimeZone offset False ""
