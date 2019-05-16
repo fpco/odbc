@@ -609,7 +609,10 @@ getData dbc stmt i col =
                    (fmap fromIntegral (odbc_TIME_STRUCT_second datePtr))))
      | colType == sql_ss_timestampoffset ->
        withCallocBytes
-         20
+         20 -- The TIMESTAMPOFFSET_STRUCT contains 3 SQLSMALLINTs,
+            -- 5 SQLUSMALLINTs, and 1 SQLUINTEGER. These correspond to 3 short
+            -- ints, 5 unsigned short ints, and 1 unsigned long int. That's
+            -- 3 * 2 bytes + 5 * 2 bytes + 1 * 4 bytes = 20 bytes.
          (\datePtr -> do
             mlen <-
               getTypedData
