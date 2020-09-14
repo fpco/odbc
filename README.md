@@ -43,6 +43,8 @@ system. That guide for the latest and greatest official Microsoft
 driver is
 [here](https://docs.microsoft.com/en-us/sql/connect/odbc/linux-mac/installing-the-microsoft-odbc-driver-for-sql-server).
 
+You can use the [SQL Server docker image](https://hub.docker.com/_/microsoft-mssql-server) to easily run SQL Server anywhere in a few seconds.
+
 I have tested the OS X instructions on my own machine.
 [This project's Dockerfile](https://github.com/fpco/odbc/blob/master/Dockerfile)
 follows setup instructions for Linux, and
