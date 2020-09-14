@@ -35,6 +35,7 @@ module Database.ODBC.SQLServer
   , Internal.Binary(..)
   , Datetime2(..)
   , Smalldatetime(..)
+  , Datetimeoffset(..)
 
     -- * Streaming results
     -- $streaming
@@ -257,6 +258,22 @@ newtype Smalldatetime = Smalldatetime
   { unSmalldatetime :: LocalTime
   } deriving (Eq, Ord, Show, Typeable, Generic, Data, FromValue)
 
+newtype Datetimeoffset = Datetimeoffset
+  { unDatetimeoffset :: ZonedTime
+  } deriving (Show, Typeable, Generic, Data, FromValue)
+
+-- SQL Server considers two datetimeoffset values to be equal as long as they
+-- represent the same instant in time; i.e. they are equavalent to the same UTC
+-- time and date. This instance reproduces that behaviour.
+instance Eq Datetimeoffset where
+  Datetimeoffset x == Datetimeoffset y = zonedTimeToUTC x == zonedTimeToUTC y
+
+-- SQL Server considers datetimeoffset values to be ordered according to their
+-- UTC equivalent values. This instance reproduces that behaviour.
+instance Ord Datetimeoffset where
+  compare (Datetimeoffset x) (Datetimeoffset y) =
+    compare (zonedTimeToUTC x) (zonedTimeToUTC y)
+
 --------------------------------------------------------------------------------
 -- Conversion to SQL
 
@@ -376,6 +393,9 @@ instance ToSql Smalldatetime where
       shrink (LocalTime dd (TimeOfDay hh mm _ss)) =
         LocalTime dd (TimeOfDay hh mm 0)
 
+instance ToSql Datetimeoffset where
+  toSql (Datetimeoffset (ZonedTime lt tzone)) = toSql $ ZonedTimeValue lt tzone
+
 --------------------------------------------------------------------------------
 -- Top-level functions
 
@@ -487,6 +507,19 @@ renderValue =
         hh
         mm
         (renderFractional ss)
+    ZonedTimeValue (LocalTime d (TimeOfDay hh mm ss)) tzone ->
+      Formatting.sformat
+        ("'" % Formatting.dateDash % " " % Formatting.left 2 '0' % ":" %
+         Formatting.left 2 '0' %
+         ":" %
+         Formatting.string %
+         Formatting.string %
+         "'")
+        d
+        hh
+        mm
+        (renderFractional ss)
+        (renderTimeZone tzone)
 
 -- | Obviously, this is not fast. But it is correct. A faster version
 -- can be written later.
@@ -497,6 +530,14 @@ renderFractional x = trim (printf "%.7f" (realToFrac x :: Double) :: String)
       reverse (case dropWhile (== '0') (reverse s) of
                  s'@('.':_) -> '0' : s'
                  s' -> s')
+
+renderTimeZone :: TimeZone -> String
+renderTimeZone (TimeZone 0 _ _) = "Z"
+renderTimeZone (TimeZone t _ _) | t < 0 = '-' : renderTimeZone' (negate t)
+renderTimeZone (TimeZone t _ _) = '+' : renderTimeZone' t
+
+renderTimeZone' :: Int -> String
+renderTimeZone' t = printf "%02d:%02d" (t `div` 60) (t `mod` 60)
 
 -- | A very conservative character escape.
 escapeChar8 :: Word8 -> Text

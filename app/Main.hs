@@ -5,6 +5,7 @@
 
 import           Control.Exception
 import           Data.List
+import           Data.Time.LocalTime (ZonedTime(..))
 import qualified Data.Text as T
 import qualified Data.Text.IO as T
 import qualified Database.ODBC.Internal as ODBC
@@ -62,3 +63,4 @@ repl c = do
             ODBC.ByteValue b -> show b
             ODBC.TimeOfDayValue v -> show v
             ODBC.LocalTimeValue v -> show v
+            ODBC.ZonedTimeValue lt tz -> show $ ZonedTime lt tz
