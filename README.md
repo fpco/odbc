@@ -66,6 +66,37 @@ test your connection easily.
     123123123
     Rows: 1
 
+## Check your package is working
+
+You can spin up a SQL Server in docker and connect to it with the
+trivial binary `odbc` that comes with this package:
+
+```
+$ docker run --net=host -e 'ACCEPT_EULA=Y' -e 'SA_PASSWORD=Passw0rd' -d mcr.microsoft.com/mssql/server:2017-CU8-ubuntu
+Unable to find image 'mcr.microsoft.com/mssql/server:2017-CU8-ubuntu' locally
+2017-CU8-ubuntu: Pulling from mssql/server
+4fa80d7b805d: Pull complete
+484dd0f2fbdc: Pull complete
+47004b22ec62: Pull complete
+b70745c852a2: Pull complete
+718060832ef2: Pull complete
+5594e4e5950b: Pull complete
+5b67719e2956: Pull complete
+7d648891de3f: Pull complete
+e0d1b3db20c8: Pull complete
+ded313a21911: Pull complete
+Digest: sha256:e1708b7d3aaf4a693ef8785f15a8b4d082939681e373c4090fd0b294d1501e57
+Status: Downloaded newer image for mcr.microsoft.com/mssql/server:2017-CU8-ubuntu
+ba1ad8b726c7e958bad6d2f7b051514f218c3024984f388adab2d6bb7751ea90
+
+$ stack exec odbc 'DRIVER={ODBC Driver 17 for SQL Server};SERVER=127.0.0.1;Uid=SA;Pwd=Passw0rd;Encrypt=no'
+> select 2 * 3;
+6
+Rows: 1
+>
+$
+```
+
 ## Common issues
 
 Compilation on Linux/OS X may require a `odbcss.h` header file for type/constant definitions. To get this install the freetds package:
