@@ -28,7 +28,6 @@ import qualified Data.ByteString.Char8 as S8
 import           Data.Char
 import           Data.Functor.Identity
 import           Data.Int
-import           Data.Monoid
 import           Data.Ratio
 import           Data.String
 import           Data.Text (Text)
@@ -203,7 +202,7 @@ dataRetrieval = do
         rows <- Internal.query c "SELECT * FROM test"
         Internal.close c
         shouldBe
-          rows
+          (map (map snd) rows)
           [ [  (IntValue 123)
             ,  (ByteStringValue "abc")
             ,  (BoolValue True)
@@ -228,7 +227,7 @@ dataRetrieval = do
             "DROP TABLE IF EXISTS no_such_table"
             (\s _ -> pure (Stop s))
             []
-        shouldBe (rows1 ++ rows2) [])
+        shouldBe (map (map snd) (rows1 ++ rows2)) [])
   quickCheckInternalRoundtrip
     "Int"
     "bigint"
@@ -468,7 +467,7 @@ quickCheckInternalRoundtrip hstype typ shower unpack =
                             result :: Either String t
                             result =
                               case rows of
-                                Right [[x]] ->
+                                Right [[(_,x)]] ->
                                   case unpack x of
                                     Nothing -> Left "Couldn't unpack value."
                                     Just v -> pure v

@@ -392,7 +392,7 @@ query ::
   -> m [row]
 query c (Query ps) = do
   rows <- Internal.query c (renderParts (toList ps))
-  case mapM fromRow rows of
+  case mapM (fromRow . map snd) rows of
     Right rows' -> pure rows'
     Left e -> liftIO (throwIO (Internal.DataRetrievalError e))
 
@@ -419,7 +419,7 @@ stream c (Query ps) cont nil =
     c
     (renderParts (toList ps))
     (\state row ->
-       case fromRow row of
+       case fromRow (map snd row) of
          Left e -> liftIO (throwIO (Internal.DataRetrievalError e))
          Right row' -> cont state row')
     nil

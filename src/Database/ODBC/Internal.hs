@@ -31,6 +31,7 @@ module Database.ODBC.Internal
   , query
   , Value(..)
   , Binary(..)
+  , Column(..)
     -- * Streaming results
   , stream
   , Step(..)
@@ -153,6 +154,7 @@ data Column = Column
   , columnSize :: !SQLULEN
   , columnDigits :: !SQLSMALLINT
   , columnNull :: !SQLSMALLINT
+  , columnName :: !Text
   } deriving (Show)
 
 --------------------------------------------------------------------------------
@@ -240,7 +242,7 @@ query ::
      MonadIO m
   => Connection -- ^ A connection to the database.
   -> Text -- ^ SQL query.
-  -> m [[Value]]
+  -> m [[(Column, Value)]]
   -- ^ A strict list of rows. This list is not lazy, so if you are
   -- retrieving a large data set, be aware that all of it will be
   -- loaded into memory.
@@ -256,7 +258,7 @@ stream ::
      (MonadIO m, MonadUnliftIO m)
   => Connection -- ^ A connection to the database.
   -> Text -- ^ SQL query.
-  -> (state -> [Value] -> m (Step state))
+  -> (state -> [(Column, Value)] -> m (Step state))
   -- ^ A stepping function that gets as input the current @state@ and
   -- a row, returning either a new @state@ or a final @result@.
   -> state
@@ -331,7 +333,7 @@ withBound = liftIO . flip withAsyncBound wait
 fetchIterator ::
      Ptr EnvAndDbc
   -> UnliftIO m
-  -> (state -> [Value] -> m (Step state))
+  -> (state -> [(Column, Value)] -> m (Step state))
   -> state
   -> SQLHSTMT s
   -> IO state
@@ -384,7 +386,7 @@ fetchAllResults dbc stmt = do
     (fetchAllResults dbc stmt)
 
 -- | Fetch all rows from a statement.
-fetchStatementRows :: Ptr EnvAndDbc -> SQLHSTMT s -> IO [[Value]]
+fetchStatementRows :: Ptr EnvAndDbc -> SQLHSTMT s -> IO [[(Column,Value)]]
 fetchStatementRows dbc stmt = do
   SQLSMALLINT cols <-
     withMalloc
@@ -450,17 +452,20 @@ describeColumn dbPtr stmt i =
                                   size <- peek sizep
                                   digits <- peek digitsp
                                   isnull <- peek nullp
+                                  namelen' <- peek namelenp
+                                  name <- T.fromPtr namep (fromIntegral namelen')
                                   evaluate
                                     Column
                                     { columnType = typ
                                     , columnSize = size
                                     , columnDigits = digits
                                     , columnNull = isnull
+                                    , columnName = name
                                     }))))))))
 
 -- | Pull data for the given column.
-getData :: Ptr EnvAndDbc -> SQLHSTMT s -> SQLUSMALLINT -> Column -> IO Value
-getData dbc stmt i col =
+getData :: Ptr EnvAndDbc -> SQLHSTMT s -> SQLUSMALLINT -> Column -> IO (Column, Value)
+getData dbc stmt i col = fmap (col, ) $
   if | colType == sql_longvarchar -> getBytesData dbc stmt i
      | colType == sql_varchar -> getBytesData dbc stmt i
      | colType == sql_char -> getBytesData dbc stmt i

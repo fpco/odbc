@@ -3,10 +3,9 @@
 
 -- | A helpful client for debugging connections.
 
-import           Control.Exception
-import           Data.List
-import qualified Data.Text as T
 import qualified Data.Text.IO as T
+import           Control.Exception
+import qualified Data.Text as T
 import qualified Database.ODBC.Internal as ODBC
 import           System.Environment
 import           System.IO
@@ -32,7 +31,7 @@ repl c = do
       hSetBuffering stdout LineBuffering
       catch
         (catch
-           (do count <- ODBC.stream c input output (0 :: Int)
+           (do (_, count) <- ODBC.stream c input output (False, 0 :: Int)
                putStrLn ("Rows: " ++ show count))
            (\case
               UserInterrupt -> pure ()
@@ -44,9 +43,15 @@ repl c = do
       hSetBuffering stdout NoBuffering
       putStr "> "
       catch (fmap Just T.getLine) (\(_ :: IOException) -> pure Nothing)
-    output count row = do
-      putStrLn (intercalate ", " (map showColumn row))
-      pure (ODBC.Continue (count + 1))
+    output (_printedHeaders, count) rowWithHeaders = do
+      T.putStrLn
+        ("[row " <> T.pack (show count) <> "]\n" <>
+         T.unlines
+           (map
+              (\(name, value) ->
+                 ODBC.columnName name <> ": " <> T.pack (showColumn value))
+              rowWithHeaders))
+      pure (ODBC.Continue (True, count + 1))
       where
         showColumn =
           \case
