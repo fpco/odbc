@@ -49,6 +49,10 @@ module Database.ODBC.SQLServer
 
    -- * Debugging
   , renderQuery
+  , queryParts
+  , renderParts
+  , renderPart
+  , renderValue
   ) where
 
 
@@ -434,6 +438,10 @@ exec c (Query ps) = Internal.exec c (renderParts (toList ps))
 
 --------------------------------------------------------------------------------
 -- Query building
+
+-- | Access the parts of a query.
+queryParts :: Query -> Seq Part
+queryParts (Query parts) = parts
 
 -- | Convert a list of parts into a query.
 renderParts :: [Part] -> Text
