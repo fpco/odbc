@@ -42,7 +42,8 @@ library
     semigroups,
     transformers,
     template-haskell,
-    parsec
+    parsec,
+    hashable
 
 executable odbc
   hs-source-dirs:    app

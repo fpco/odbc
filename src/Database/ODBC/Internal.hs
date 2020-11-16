@@ -46,6 +46,7 @@ import           Control.Exception
 import           Control.Monad
 import           Control.Monad.IO.Class
 import           Control.Monad.IO.Unlift
+import           Data.Hashable
 import           Data.ByteString (ByteString)
 import qualified Data.ByteString.Unsafe as S
 import           Data.Coerce
@@ -128,6 +129,23 @@ data Value
     -- ^ SQL null value.
   deriving (Eq, Show, Typeable, Ord, Generic, Data)
 instance NFData Value
+
+instance Hashable Value where
+  hashWithSalt salt =
+    \case
+      TextValue x -> hashWithSalt salt x
+      ByteStringValue x -> hashWithSalt salt x
+      BinaryValue !(Binary b) -> hashWithSalt salt b
+      BoolValue x -> hashWithSalt salt x
+      DoubleValue x -> hashWithSalt salt x
+      FloatValue x -> hashWithSalt salt x
+      IntValue x -> hashWithSalt salt x
+      ByteValue x -> hashWithSalt salt x
+      -- TODO: faster versions of these?
+      DayValue x -> hashWithSalt salt (show x)
+      TimeOfDayValue !x -> hashWithSalt salt (show  x)
+      LocalTimeValue x -> hashWithSalt salt (show  x)
+      NullValue -> hashWithSalt salt ()
 
 -- | A simple newtype wrapper around the 'ByteString' type to use when
 -- you want to mean the @binary@ type of SQL, and render to binary
