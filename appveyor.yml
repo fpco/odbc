@@ -20,7 +20,7 @@ before_test:
 - cd "%WORK_DIR%"
 
 # Install stack
-- ps: Start-FileDownload https://www.stackage.org/stack/windows-x86_64 -FileName stack.zip
+- curl -L https://www.stackage.org/stack/windows-x86_64 -o stack.zip
 - 7z x stack.zip stack.exe
 
 # Install ODBC drivers
