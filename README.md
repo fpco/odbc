@@ -99,12 +99,8 @@ $
 
 ## Common issues
 
-Compilation on Linux/OS X may require a `odbcss.h` header file for type/constant definitions. To get this install the freetds package:
 
-* [Linux example](https://github.com/fpco/odbc/blob/efe81f7c17f5ff4c1cf8937577b32f049c0dd62b/Dockerfile#L15).
-* On OS X you can use `brew install freetds`.
-
-Windows should already have this file.
+### Can't open lib 'ODBC Driver 13 for SQL Server'
 
 If you see an error like this:
 
@@ -114,6 +110,25 @@ Then you might be trying to use the wrong driver. You might have
 installed version `17`, so change the string to `ODBC Driver 17 for
 SQL Server`.
 
+If it still says this, you might have to configure an odbcinst.ini
+file:
+
+``` yaml
+[ODBC Driver 17 for SQL Server]
+Driver = <driver_path>
+```
+
+In Nix, this might be where <driver_path> is the result of evaluating
+`${nixpkgs.unixODBCDrivers.msodbcsql17}/lib/libmsodbcsql-17.7.so.1.1"`.
+
+Which would need the following packages available:
+
+* nixpkgs.freetds
+* nixpklgs.unixODBC
+* nixpkgs.unixODBCDrivers.msodbcsql17
+
+### Data source name not found and no default driver specified
+
 If you see an error like this:
 
     [unixODBC][Driver Manager]Data source name not found and no default driver specified
@@ -122,6 +137,8 @@ This is a terrible error message. If passing your DSN via a shell
 environment variable or argument, check that your input string isn't
 quoted e.g. `"Driver=.."` instead of `Driver=..` due to silly shell
 scripting quoting issues.
+
+## Terminating with uncaught exception of type
 
 If you see an error like this on OS X with driver version 17,
 
