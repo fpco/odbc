@@ -4,14 +4,12 @@
 #include <sql.h>
 #include <sqlext.h>
 #include <sqltypes.h>
-#include <odbcss.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
 #include <sql.h>
 #include <sqlext.h>
 #include <sqltypes.h>
-#include <odbcss.h>
 
 #define FALSE 0
 #define TRUE 1
