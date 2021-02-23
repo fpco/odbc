@@ -162,7 +162,7 @@ conversionTo = do
   quickCheckRoundtrip @ByteString "ByteString" ("varchar(" <>  (show maxStringLen) <> ")")
   quickCheckRoundtrip @TestBinary "ByteString" ("binary(" <>  (show maxStringLen) <> ")")
   quickCheckRoundtrip @Binary "ByteString" ("varbinary(" <>  (show maxStringLen) <> ")")
-  quickCheckRoundtripEx @TestGUID False "GUID" "uniqueidentifier"
+  quickCheckRoundtrip @TestGUID "GUID" "uniqueidentifier" -- Regression tests against https://github.com/fpco/odbc/issues/30
 
 connectivity :: Spec
 connectivity = do

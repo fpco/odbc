@@ -679,16 +679,21 @@ getGuid :: Ptr EnvAndDbc -> SQLHSTMT s -> SQLUSMALLINT -> IO Value
 getGuid dbc stmt column = do
   uninterruptibleMask_
     (do bufferp <- callocBytes odbcGuidBytes
-        void
-          (getTypedData
-             dbc
-             stmt
-             sql_c_binary
-             column
-             (coerce bufferp)
-             (SQLLEN odbcGuidBytes))
-        !bs <- S.unsafePackMallocCStringLen (bufferp, odbcGuidBytes)
-        evaluate (BinaryValue (Binary bs)))
+        copiedBytes <-
+          getTypedData
+            dbc
+            stmt
+            sql_c_binary
+            column
+            (coerce bufferp)
+            (SQLLEN odbcGuidBytes)
+        case copiedBytes of
+          Nothing -> do
+            free bufferp
+            pure NullValue
+          Just {} -> do
+            !bs <- S.unsafePackMallocCStringLen (bufferp, odbcGuidBytes)
+            evaluate (BinaryValue (Binary bs)))
 
 -- | Get the column's data as a vector of CHAR.
 getBytesData :: Ptr EnvAndDbc -> SQLHSTMT s -> SQLUSMALLINT -> IO Value
