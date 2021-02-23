@@ -3,6 +3,8 @@
 
 -- | A helpful client for debugging connections.
 
+module Main (main) where
+
 import qualified Data.Text.IO as T
 import           Control.Exception
 import qualified Data.Text as T
