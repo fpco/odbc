@@ -124,6 +124,7 @@ regressions = do
 bigData :: Spec
 bigData = do
   roundtrip @Text "2MB text" "Text" "ntext" (T.replicate (1024*1024*2) "A")
+  roundtrip @Text "2MB text special characters" "Text" "ntext" (T.replicate (1024*1024*2) "<")
   roundtrip @ByteString "2MB binary" "ByteString" "text" (S.replicate (1024*1024*2) 97)
 
 conversionTo :: Spec

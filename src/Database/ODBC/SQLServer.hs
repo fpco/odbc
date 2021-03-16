@@ -515,10 +515,10 @@ escapeChar8 ch =
 
 -- | A very conservative character escape.
 escapeChar :: Char -> Text
-escapeChar ch =
-  if allowedChar ch
-     then T.singleton ch
-     else "'+NCHAR(" <> Formatting.sformat Formatting.int (fromEnum ch) <> ")+'"
+escapeChar =
+  \case 
+    '\'' -> "''"
+    ch -> T.singleton ch
 
 -- | Is the character allowed to be printed unescaped? We only print a
 -- small subset of ASCII just for visually debugging later
