@@ -508,10 +508,10 @@ renderFractional x = trim (printf "%.7f" (realToFrac x :: Double) :: String)
 
 -- | A very conservative character escape.
 escapeChar8 :: Word8 -> Text
-escapeChar8 ch =
-  if allowedChar (toEnum (fromIntegral ch))
-     then T.singleton (toEnum (fromIntegral ch))
-     else "'+CHAR(" <> Formatting.sformat Formatting.int ch <> ")+'"
+escapeChar8 =
+  \case 
+    39 -> "''"
+    ch -> T.singleton (toEnum (fromIntegral ch))
 
 -- | A very conservative character escape.
 escapeChar :: Char -> Text
