@@ -128,6 +128,7 @@ bigData :: Spec
 bigData = do
   roundtrip @Text "2MB text" "Text" "ntext" (T.replicate (1024*1024*2) "A")
   roundtrip @ByteString "2MB binary" "ByteString" "text" (S.replicate (1024*1024*2) 97)
+  roundtrip @Binary "2MB binary" "Binary" "varbinary(max)" (SQLServer.Binary (S.replicate 10 97))
 
 conversionTo :: Spec
 conversionTo = do
@@ -366,15 +367,15 @@ quickCheckRoundtripEx testMaybes l typ =
                                 (liftIO
                                    (putStr
                                       (unlines
-                                         [ "Expected: " ++ show input
-                                         , "Actual: " ++ show result
+                                         [ "Expected: " ++ take 80 (show input)
+                                         , "Actual: " ++ take 80 (show result)
                                          , "Query was: " ++ show q
                                          ])))
                               monitor
                                 (counterexample
                                    (unlines
-                                      [ "Expected: " ++ show input
-                                      , "Actual: " ++ show result
+                                      [ "Expected: " ++ take 80 (show input)
+                                      , "Actual: " ++ take 80 (show result)
                                       , "Query was: " ++
                                         T.unpack (SQLServer.renderQuery q)
                                       ]))
@@ -575,6 +576,26 @@ parametrizedSpec = do
              joinQueryParametrized
              ("select ? from y where x = ?", [IntValue 123]))
           (Left "too many ? in format string or missing param"))
+  beforeAll
+    connectWithString
+    (afterAll
+       Internal.close
+       (it
+          "Multiple params"
+          (\c ->
+             property
+               (\text bytes -> do
+                  rows :: [[Value]] <-
+                    SQLServer.query
+                      c
+                      ("SELECT " <> toSql (text :: Text) <> ",  " <>
+                       toSql (SQLServer.Binary bytes :: Binary))
+                  shouldBe
+                    rows
+                    [ [ TextValue text
+                      , BinaryValue (SQLServer.Binary bytes)
+                      ]
+                    ]))))
 
 --------------------------------------------------------------------------------
 -- Orphan instances

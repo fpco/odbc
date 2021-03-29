@@ -1,4 +1,5 @@
 {-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE TupleSections #-}
 {-# LANGUAGE DeriveDataTypeable #-}
@@ -35,6 +36,11 @@ module Database.ODBC.Internal
     -- * Streaming results
   , stream
   , Step(..)
+    -- * Parameters
+  , execWithParams
+  , queryWithParams
+  , streamWithParams
+  , Param(..)
     -- * Exceptions
   , ODBCException(..)
   ) where
@@ -46,11 +52,12 @@ import           Control.Exception
 import           Control.Monad
 import           Control.Monad.IO.Class
 import           Control.Monad.IO.Unlift
-import           Data.Hashable
 import           Data.ByteString (ByteString)
+import qualified Data.ByteString as S
 import qualified Data.ByteString.Unsafe as S
 import           Data.Coerce
 import           Data.Data
+import           Data.Hashable
 import           Data.Int
 import           Data.String
 import           Data.Text (Text)
@@ -147,6 +154,18 @@ instance Hashable Value where
       LocalTimeValue x -> hashWithSalt salt (show  x)
       NullValue -> hashWithSalt salt ()
 
+-- | A parameter to a query that corresponds to a ?.
+--
+-- Presently we only support variable sized values like text and byte
+-- vectors.
+--
+-- @since 0.2.4
+data Param
+  = TextParam !Text -- ^ See docs for 'TextValue'.
+  | BinaryParam !Binary -- ^ See docs for 'BinaryValue'.
+  deriving (Eq, Show, Typeable, Ord, Generic, Data)
+instance NFData Param
+
 -- | A simple newtype wrapper around the 'ByteString' type to use when
 -- you want to mean the @binary@ type of SQL, and render to binary
 -- literals e.g. @0xFFEF01@.
@@ -241,19 +260,29 @@ withConnection :: MonadUnliftIO m =>
 withConnection str inner = withRunInIO $ \io ->
   withBound $ bracket (connect str) close (\h -> io (inner h))
 
-
 -- | Execute a statement on the database.
 exec ::
      MonadIO m
   => Connection -- ^ A connection to the database.
   -> Text -- ^ SQL statement.
   -> m ()
-exec conn string =
+exec conn string = execWithParams conn string mempty
+
+-- | Same as 'exec' but with parameters.
+--
+-- @since 0.2.4
+execWithParams ::
+     MonadIO m
+  => Connection -- ^ A connection to the database.
+  -> Text -- ^ SQL query with ? inside.
+  -> [Param] -- ^ Params matching the ? in the query string.
+  -> m ()
+execWithParams conn string params =
   withBound
     (withHDBC
        conn
        "exec"
-       (\dbc -> withExecDirect dbc string (fetchAllResults dbc)))
+       (\dbc -> withExecDirect dbc string params (fetchAllResults dbc)))
 
 -- | Query and return a list of rows.
 query ::
@@ -264,12 +293,26 @@ query ::
   -- ^ A strict list of rows. This list is not lazy, so if you are
   -- retrieving a large data set, be aware that all of it will be
   -- loaded into memory.
-query conn string =
+query conn string = queryWithParams conn string mempty
+
+-- | Same as 'query' but with parameters.
+--
+-- @since 0.2.4
+queryWithParams ::
+     MonadIO m
+  => Connection -- ^ A connection to the database.
+  -> Text -- ^ SQL query with ? inside.
+  -> [Param] -- ^ Params matching the ? in the query string.
+  -> m [[(Column, Value)]]
+  -- ^ A strict list of rows. This list is not lazy, so if you are
+  -- retrieving a large data set, be aware that all of it will be
+  -- loaded into memory.
+queryWithParams conn string params =
   withBound
     (withHDBC
        conn
        "query"
-       (\dbc -> withExecDirect dbc string (fetchStatementRows dbc)))
+       (\dbc -> withExecDirect dbc string params (fetchStatementRows dbc)))
 
 -- | Stream results like a fold with the option to stop at any time.
 stream ::
@@ -284,7 +327,25 @@ stream ::
   -- evaluated each iteration.
   -> m state
   -- ^ Final result, produced by the stepper function.
-stream conn string step state = do
+stream conn string step state = streamWithParams conn string mempty step state
+
+-- | Same as 'stream' but with parameters.
+--
+-- @since 0.2.4
+streamWithParams ::
+     (MonadIO m, MonadUnliftIO m)
+  => Connection -- ^ A connection to the database.
+  -> Text -- ^ SQL query with ? inside.
+  -> [Param] -- ^ Params matching the ? in the query string.
+  -> (state -> [(Column, Value)] -> m (Step state))
+  -- ^ A stepping function that gets as input the current @state@ and
+  -- a row, returning either a new @state@ or a final @result@.
+  -> state
+  -- ^ A state that you can use for the computation. Strictly
+  -- evaluated each iteration.
+  -> m state
+  -- ^ Final result, produced by the stepper function.
+streamWithParams conn string params step state = do
   unlift <- askUnliftIO
   withBound
     (withHDBC
@@ -294,6 +355,7 @@ stream conn string step state = do
           withExecDirect
             dbc
             string
+            params
             (fetchIterator dbc unlift step state)))
 
 --------------------------------------------------------------------------------
@@ -313,24 +375,27 @@ withHDBC conn label f =
            pure v)
 
 -- | Execute a query directly without preparation.
-withExecDirect :: Ptr EnvAndDbc -> Text -> (forall s. SQLHSTMT s -> IO a) -> IO a
-withExecDirect dbc string cont =
+withExecDirect :: Ptr EnvAndDbc -> Text -> [Param] -> (forall s. SQLHSTMT s -> IO a) -> IO a
+withExecDirect dbc string params cont =
   withStmt
     dbc
-    (\stmt -> do
-       void
-         (assertSuccessOrNoData
-            dbc
-            "odbc_SQLExecDirectW"
-            (T.useAsPtr
-               string
-               (\wstring len ->
-                  odbc_SQLExecDirectW
-                    dbc
-                    stmt
-                    (coerce wstring)
-                    (fromIntegral len))))
-       cont stmt)
+    (withBindParameters
+       dbc
+       params
+       (\stmt -> do
+          void
+            (assertSuccessOrNoData
+               dbc
+               "odbc_SQLExecDirectW"
+               (T.useAsPtr
+                  string
+                  (\wstring len ->
+                     odbc_SQLExecDirectW
+                       dbc
+                       stmt
+                       (coerce wstring)
+                       (fromIntegral len))))
+          cont stmt))
 
 -- | Run the function with a statement.
 withStmt :: Ptr EnvAndDbc -> (forall s. SQLHSTMT s -> IO a) -> IO a
@@ -343,6 +408,72 @@ withStmt hdbc =
 -- interaction with signals in ODBC and GHC's runtime.
 withBound :: MonadIO m => IO a -> m a
 withBound = liftIO . flip withAsyncBound wait
+
+--------------------------------------------------------------------------------
+-- Binding params
+
+-- | With parameters bounded. The fold is needed because the malloc'd
+-- lengths passed in as the last parameter to SQLBindParameter is used
+-- after calling SQLBindParameter, otherwise we could've just had a
+-- loop.
+withBindParameters ::
+     Ptr EnvAndDbc -> [Param] -> (SQLHSTMT s -> IO a) -> (SQLHSTMT s -> IO a)
+withBindParameters dbc ps cont =
+  foldr
+    (\(parameter_number, param) -> withBindParameter dbc parameter_number param)
+    cont
+    (zip [1 ..] ps)
+
+-- | Bind a param to the statement, throwing on failure.
+withBindParameter ::
+     Ptr EnvAndDbc
+  -> SQLUSMALLINT
+  -> Param
+  -> (SQLHSTMT s -> IO a)
+  -> SQLHSTMT s -> IO a
+withBindParameter dbc parameter_number param cont statement_handle = go param
+  where
+    go =
+      \case
+        TextParam text ->
+          T.useAsPtr -- Pass as wide char UTF-16.
+            text
+            (\ptr len_in_chars ->
+               runBind
+                 (coerce sql_c_wchar)
+                 (coerce sql_wlongvarchar)
+                 (fromIntegral len_in_chars) -- This is the length in chars.
+                 (coerce ptr)
+                 (fromIntegral len_in_chars * 2))
+                 -- Note the doubling here for length as bytes, for UTF-16.
+        BinaryParam (Binary binary) ->
+          S.useAsCStringLen -- Pass as "raw binary".
+            binary
+            (\(ptr, len) ->
+               runBind
+                 (coerce sql_c_binary)
+                 sql_varbinary
+                 sql_ss_length_unlimited -- Note the unlimited column size here.
+                 (coerce ptr)
+                 (fromIntegral len))
+    runBind value_type parameter_type column_size parameter_value_ptr buffer_length =
+      withMalloc
+        (\buffer_length_ptr -> do
+           poke buffer_length_ptr buffer_length
+           assertSuccess
+             dbc
+             "odbc_SQLBindParameter"
+             (odbc_SQLBindParameter
+                dbc
+                statement_handle
+                parameter_number
+                value_type
+                parameter_type
+                column_size
+                parameter_value_ptr
+                buffer_length
+                buffer_length_ptr)
+           cont statement_handle)
 
 --------------------------------------------------------------------------------
 -- Internal data retrieval functions
@@ -837,7 +968,7 @@ assertSuccess dbc label m = do
       ptr <- odbc_error dbc
       string <-
         if nullPtr == ptr
-          then pure ""
+          then pure "No error message given from ODBC."
           else peekCString ptr
       throwIO (UnsuccessfulReturnCode label (coerce retcode) string)
 
@@ -897,7 +1028,7 @@ newtype SQLSMALLINT = SQLSMALLINT Int16 deriving (Show, Eq, Storable, Num, Integ
 newtype SQLLEN = SQLLEN Int64 deriving (Show, Eq, Storable, Num)
 
 -- https://github.com/Microsoft/ODBC-Specification/blob/753d7e714b7eab9eaab4ad6105fdf4267d6ad6f6/Windows/inc/sqltypes.h#L65..L65
-newtype SQLULEN = SQLULEN Word64 deriving (Show, Eq, Storable)
+newtype SQLULEN = SQLULEN Word64 deriving (Show, Eq, Storable, Num)
 
 -- https://github.com/Microsoft/ODBC-Specification/blob/753d7e714b7eab9eaab4ad6105fdf4267d6ad6f6/Windows/inc/sqltypes.h#L60
 newtype SQLINTEGER = SQLINTEGER Int64 deriving (Show, Eq, Storable, Num)
@@ -937,6 +1068,19 @@ foreign import ccall "odbc &odbc_SQLDisconnect"
 
 foreign import ccall "odbc odbc_SQLAllocStmt"
   odbc_SQLAllocStmt :: Ptr EnvAndDbc -> IO (SQLHSTMT s)
+
+foreign import ccall "odbc odbc_SQLBindParameter"
+  odbc_SQLBindParameter
+    :: Ptr EnvAndDbc -- ^ envAndDbc
+    -> SQLHSTMT s    -- ^ statement_handle
+    -> SQLUSMALLINT  -- ^ parameter_number
+    -> SQLSMALLINT   -- ^ value_type
+    -> SQLSMALLINT   -- ^ parameter_type
+    -> SQLULEN       -- ^ column_size
+    -> SQLPOINTER    -- ^ parameter_value_ptr
+    -> SQLLEN        -- ^ buffer_length
+    -> Ptr SQLLEN    -- ^ buffer_length_ptr
+    -> IO RETCODE
 
 foreign import ccall "odbc odbc_SQLFreeStmt"
   odbc_SQLFreeStmt :: SQLHSTMT s -> IO ()
@@ -1181,3 +1325,10 @@ sql_c_type_timestamp = coerce sql_type_timestamp
 
 sql_c_time :: SQLCTYPE
 sql_c_time = coerce sql_time
+
+-- Unlimited size
+--
+-- <https://docs.microsoft.com/en-us/sql/relational-databases/native-client-odbc-api/sqlbindparameter?view=sql-server-ver15#binding-parameters-for-sql-character-types>
+-- <https://docs.rs/odbc-sys/0.6.3/odbc_sys/constant.SQL_SS_LENGTH_UNLIMITED.html>
+sql_ss_length_unlimited :: SQLULEN
+sql_ss_length_unlimited = 0
