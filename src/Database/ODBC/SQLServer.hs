@@ -50,6 +50,7 @@ module Database.ODBC.SQLServer
    -- * Debugging
   , renderQuery
   , queryParts
+  , Part(..)
   , renderParts
   , renderPart
   , renderValue
