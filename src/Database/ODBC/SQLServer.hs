@@ -47,6 +47,10 @@ module Database.ODBC.SQLServer
 
   , Internal.ODBCException(..)
 
+   -- * Parametrized queries
+ , splitQueryParametrized
+ , joinQueryParametrized
+
    -- * Debugging
   , renderQuery
   , queryParts
@@ -57,10 +61,13 @@ module Database.ODBC.SQLServer
   ) where
 
 
+import           Control.Applicative
 import           Control.DeepSeq
 import           Control.Exception
+import           Control.Monad
 import           Control.Monad.IO.Class
 import           Control.Monad.IO.Unlift
+import qualified Data.Attoparsec.Text as Atto
 import           Data.ByteString (ByteString)
 import qualified Data.ByteString as S
 import qualified Data.ByteString.Lazy as L
@@ -69,6 +76,7 @@ import           Data.Data
 import           Data.Fixed
 import           Data.Foldable
 import           Data.Int
+import           Data.Maybe
 import           Data.Monoid (Monoid, (<>))
 import           Data.Semigroup (Semigroup)
 import           Data.Sequence (Seq)
@@ -526,3 +534,58 @@ escapeChar ch =
 -- on. Everything else is escaped.
 allowedChar :: Char -> Bool
 allowedChar c = (isAlphaNum c && isAscii c) || elem c (" ,.-_" :: [Char])
+
+-- | Splits a query up into a parametrized text with ? and the values
+-- used.
+--
+-- For if you're working with an API that assumes queries and
+-- parameters are separated.
+splitQueryParametrized :: Query -> (Text, [Value])
+splitQueryParametrized q = (text, params)
+  where
+    text =
+      foldMap
+        (\case
+           TextPart t -> t
+           ValuePart {} -> "?")
+        parts
+    params =
+      mapMaybe
+        (\case
+           TextPart {} -> Nothing
+           ValuePart value -> pure value)
+        parts
+    parts = toList (queryParts q)
+
+-- | Join a query with ? in it with the values into a Query. Checks
+-- that they match.
+joinQueryParametrized :: Text -> [Value] -> Either String Query
+joinQueryParametrized text0 params0 = do
+  parts <- Atto.parseOnly partsParser text0
+  (parts', remainingParams) <-
+    foldM
+      (\(q, params) ->
+         \case
+           TextF text -> pure (q <> pure (TextPart text), params)
+           ParamF ->
+             case params of
+               [] -> Left "too many ? in format string or missing param"
+               (v:params') -> pure (q <> pure (ValuePart v), params'))
+      (mempty, params0)
+      parts
+  unless (null remainingParams) (Left "not enough ? or extraneous param")
+  pure (Query parts')
+
+--------------------------------------------------------------------------------
+-- A simple ?-syntax parser
+
+data FPart
+  = TextF !Text
+  | ParamF
+  deriving (Show, Eq)
+
+partsParser :: Atto.Parser [FPart]
+partsParser = (<>) <$> fmap pure part1 <*> many (param <|> part1)
+  where
+    param = (Atto.char '?' *> pure ParamF) Atto.<?> "?"
+    part1 = (TextF <$> Atto.takeWhile1 (/= '?')) Atto.<?> "SQL text without ?"

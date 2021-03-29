@@ -38,7 +38,7 @@ import           Data.Word
 import           Database.ODBC.Conversion (FromValue(..))
 import           Database.ODBC.Internal (Value (..), Connection, ODBCException(..), Step(..), Binary)
 import qualified Database.ODBC.Internal as Internal
-import           Database.ODBC.SQLServer (Datetime2(..), Smalldatetime(..), ToSql(..))
+import           Database.ODBC.SQLServer (splitQueryParametrized, joinQueryParametrized, Datetime2(..), Smalldatetime(..), ToSql(..))
 import qualified Database.ODBC.SQLServer as SQLServer
 import           Database.ODBC.TH (partsParser, Part(..))
 import           System.Environment
@@ -65,7 +65,10 @@ spec = do
         describe "Regression tests" regressions
         describe "Data retrieval" dataRetrieval
         describe "Big data" bigData)
-  describe "Database.ODBC.SQLServer" (describe "Conversion to SQL" conversionTo)
+  describe
+    "Database.ODBC.SQLServer"
+    (do describe "Conversion to SQL" conversionTo
+        describe "Parametrized" parametrizedSpec)
   describe "Database.ODBC.TH" thparser
 
 thparser :: SpecWith ()
@@ -530,6 +533,48 @@ connectWithString = do
 lookupEnvUnquote :: String -> IO (Maybe [Char])
 lookupEnvUnquote = fmap (fmap strip) . lookupEnv
   where strip = reverse . dropWhile (=='"') . reverse . dropWhile (=='"')
+
+--------------------------------------------------------------------------------
+-- Parametrized queries
+
+parametrizedSpec :: Spec
+parametrizedSpec = do
+  it
+    "splitQueryParametrized"
+    (do shouldBe (splitQueryParametrized "select 123") ("select 123", [])
+        shouldBe
+          (splitQueryParametrized ("select " <> toSql (123 :: Int)))
+          ("select ?", [IntValue 123])
+        shouldBe
+          (splitQueryParametrized
+             ("select " <> toSql (123 :: Int) <> " from y where x = " <>
+              toSql ("abc" :: Text)))
+          ("select ? from y where x = ?", [IntValue 123, TextValue "abc"]))
+  it
+    "joinQueryParametrized"
+    (do shouldBe
+          (uncurry joinQueryParametrized ("?select 123", []))
+          (Left "SQL text without ?: Failed reading: takeWhile1")
+        shouldBe
+          (uncurry joinQueryParametrized ("select 123", []))
+          (Right "select 123")
+        shouldBe
+          (uncurry
+             joinQueryParametrized
+             ("select ? from y where x = ?", [IntValue 123, TextValue "abc"]))
+          (Right
+             ("select " <> toSql (123 :: Int) <> " from y where x = " <>
+              toSql ("abc" :: Text)))
+        shouldBe
+          (uncurry
+             joinQueryParametrized
+             ("select ? from y where x = ", [IntValue 123, TextValue "abc"]))
+          (Left "not enough ? or extraneous param")
+        shouldBe
+          (uncurry
+             joinQueryParametrized
+             ("select ? from y where x = ?", [IntValue 123]))
+          (Left "too many ? in format string or missing param"))
 
 --------------------------------------------------------------------------------
 -- Orphan instances

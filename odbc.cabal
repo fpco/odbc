@@ -43,7 +43,8 @@ library
     transformers,
     template-haskell,
     parsec,
-    hashable
+    hashable,
+    attoparsec
 
 executable odbc
   hs-source-dirs:    app
