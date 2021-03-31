@@ -149,3 +149,9 @@ for C/en_AU.UTF-8/C/C/C/C
 ```
 
 use driver 13 or [see here for more detail](https://github.com/fpco/odbc/issues/17).
+
+## Contributors
+
+* Spencer Janssen
+* Yo Eight
+* Marco Z

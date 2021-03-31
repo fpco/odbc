@@ -160,11 +160,44 @@ void odbc_SQLFreeStmt(SQLHSTMT *hstmt){
 }
 
 ////////////////////////////////////////////////////////////////////////////////
+// Params
+
+SQLRETURN odbc_SQLBindParameter(
+  EnvAndDbc*    envAndDbc,
+  SQLHSTMT*     statement_handle,
+  SQLUSMALLINT  parameter_number,
+  SQLSMALLINT   value_type,
+  SQLSMALLINT   parameter_type,
+  SQLULEN       column_size,
+  SQLPOINTER    parameter_value_ptr,
+  SQLLEN        buffer_length,
+  SQLLEN*       buffer_length_ptr
+  ) {
+  RETCODE r = SQLBindParameter(
+    *statement_handle,
+    parameter_number,
+    SQL_PARAM_INPUT,
+    value_type,
+    parameter_type,
+    column_size,
+    0,
+    parameter_value_ptr,
+    buffer_length,
+    buffer_length_ptr
+    );
+  if (r == SQL_ERROR)
+    odbc_ProcessLogMessages(envAndDbc, SQL_HANDLE_STMT, *statement_handle, "odbc_SQLBindParameter", FALSE);
+  return r;
+}
+
+////////////////////////////////////////////////////////////////////////////////
 // Execute
 
 RETCODE odbc_SQLExecDirectW(EnvAndDbc *envAndDbc, SQLHSTMT *hstmt, SQLWCHAR *stmt, SQLINTEGER len){
   RETCODE r = SQLExecDirectW(*hstmt, stmt, len);
-  if (r == SQL_ERROR) odbc_ProcessLogMessages(envAndDbc, SQL_HANDLE_STMT, *hstmt, "odbc_SQLExecDirectW", FALSE);
+  if (r == SQL_ERROR) {
+    odbc_ProcessLogMessages(envAndDbc, SQL_HANDLE_STMT, *hstmt, "odbc_SQLExecDirectW", FALSE);
+  }
   return r;
 }
 

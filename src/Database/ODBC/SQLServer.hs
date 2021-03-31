@@ -58,6 +58,7 @@ module Database.ODBC.SQLServer
   , renderParts
   , renderPart
   , renderValue
+  , renderedAndParams
   ) where
 
 
@@ -88,7 +89,7 @@ import qualified Data.Text.Lazy as LT
 import           Data.Time
 import           Data.Word
 import           Database.ODBC.Conversion
-import           Database.ODBC.Internal (Value(..), Connection)
+import           Database.ODBC.Internal (Param(..), Value(..), Connection)
 import qualified Database.ODBC.Internal as Internal
 import qualified Formatting
 import           Formatting ((%))
@@ -307,16 +308,20 @@ instance ToSql Text where
 instance ToSql LT.Text where
   toSql = toSql . TextValue . LT.toStrict
 
--- | Corresponds to TEXT (non-Unicode) of SQL Server. For proper
--- BINARY, see the 'Binary' type.
+-- | AVOID THIS TYPE: Corresponds to TEXT/VARCHAR (non-Unicode) of SQL
+-- Server. For proper BINARY, see the 'Binary' type. For proper text,
+-- use 'Text'.
 instance ToSql ByteString where
   toSql = toSql . ByteStringValue
 
+-- | Corresponds to TEXT/VARCHAR (non-Unicode) of SQL
+-- Server. For proper BINARY, see the 'Binary' type. For proper text,
+-- use 'Text'.
 instance ToSql Internal.Binary where
   toSql = toSql . BinaryValue
 
--- | Corresponds to TEXT (non-Unicode) of SQL Server. For Unicode, use
--- the 'Text' type.
+-- | AVOID THIS TYPE: Corresponds to TEXT (non-Unicode) of SQL
+-- Server. For Unicode, use the 'Text' type.
 instance ToSql L.ByteString where
   toSql = toSql . ByteStringValue . L.toStrict
 
@@ -403,11 +408,12 @@ query ::
   => Connection -- ^ A connection to the database.
   -> Query -- ^ SQL query.
   -> m [row]
-query c (Query ps) = do
-  rows <- Internal.query c (renderParts (toList ps))
+query c q = do
+  rows <- Internal.queryWithParams c rendered params
   case mapM (fromRow . map snd) rows of
     Right rows' -> pure rows'
     Left e -> liftIO (throwIO (Internal.DataRetrievalError e))
+  where (rendered, params) = renderedAndParams q
 
 -- | Render a query to a plain text string. Useful for debugging and
 -- testing.
@@ -427,15 +433,17 @@ stream ::
   -- evaluated each iteration.
   -> m state
   -- ^ Final result, produced by the stepper function.
-stream c (Query ps) cont nil =
-  Internal.stream
+stream c q cont nil =
+  Internal.streamWithParams
     c
-    (renderParts (toList ps))
+    rendered
+    params
     (\state row ->
        case fromRow (map snd row) of
          Left e -> liftIO (throwIO (Internal.DataRetrievalError e))
          Right row' -> cont state row')
     nil
+  where (rendered, params) = renderedAndParams q
 
 -- | Execute a statement on the database.
 exec ::
@@ -443,10 +451,43 @@ exec ::
   => Connection -- ^ A connection to the database.
   -> Query -- ^ SQL statement.
   -> m ()
-exec c (Query ps) = Internal.exec c (renderParts (toList ps))
+exec c q = Internal.execWithParams c rendered params
+  where
+    (rendered, params) = renderedAndParams q
 
 --------------------------------------------------------------------------------
 -- Query building
+
+-- | Splits a query up into a parametrized text with ? and the params
+-- used.
+renderedAndParams :: Query -> (Text, [Param])
+renderedAndParams q = (renderParts parts', params)
+  where
+    parts' =
+      map
+        (\case
+           ValuePart v
+             | Just {} <- valueToParam v -> TextPart "?"
+           p -> p)
+        parts
+    params =
+      mapMaybe
+        (\case
+           ValuePart v
+             | Just p <- valueToParam v -> Just p
+           _ -> Nothing)
+        parts
+    parts = toList (queryParts q)
+
+-- | Convert a value to a parameter, if possible. Values that aren't
+-- parameters will be inlined in the query string directly. SQL Server
+-- is capable of caching constants, so this isn't an issue.
+valueToParam :: Value -> Maybe Param
+valueToParam =
+  \case
+    TextValue v | not (T.null v) -> pure $ TextParam v
+    BinaryValue v@(Internal.Binary s) | not (S.null s) -> pure $ BinaryParam v
+    _ -> Nothing
 
 -- | Access the parts of a query.
 queryParts :: Query -> Seq Part
@@ -540,6 +581,8 @@ allowedChar c = (isAlphaNum c && isAscii c) || elem c (" ,.-_" :: [Char])
 --
 -- For if you're working with an API that assumes queries and
 -- parameters are separated.
+--
+-- @since 0.2.4
 splitQueryParametrized :: Query -> (Text, [Value])
 splitQueryParametrized q = (text, params)
   where
@@ -559,6 +602,8 @@ splitQueryParametrized q = (text, params)
 
 -- | Join a query with ? in it with the values into a Query. Checks
 -- that they match.
+--
+-- @since 0.2.4
 joinQueryParametrized :: Text -> [Value] -> Either String Query
 joinQueryParametrized text0 params0 = do
   parts <- Atto.parseOnly partsParser text0
