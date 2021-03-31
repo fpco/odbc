@@ -308,16 +308,20 @@ instance ToSql Text where
 instance ToSql LT.Text where
   toSql = toSql . TextValue . LT.toStrict
 
--- | Corresponds to TEXT (non-Unicode) of SQL Server. For proper
--- BINARY, see the 'Binary' type.
+-- | AVOID THIS TYPE: Corresponds to TEXT/VARCHAR (non-Unicode) of SQL
+-- Server. For proper BINARY, see the 'Binary' type. For proper text,
+-- use 'Text'.
 instance ToSql ByteString where
   toSql = toSql . ByteStringValue
 
+-- | Corresponds to TEXT/VARCHAR (non-Unicode) of SQL
+-- Server. For proper BINARY, see the 'Binary' type. For proper text,
+-- use 'Text'.
 instance ToSql Internal.Binary where
   toSql = toSql . BinaryValue
 
--- | Corresponds to TEXT (non-Unicode) of SQL Server. For Unicode, use
--- the 'Text' type.
+-- | AVOID THIS TYPE: Corresponds to TEXT (non-Unicode) of SQL
+-- Server. For Unicode, use the 'Text' type.
 instance ToSql L.ByteString where
   toSql = toSql . ByteStringValue . L.toStrict
 

@@ -105,17 +105,25 @@ instance Exception ODBCException
 -- | A value used for input/output with the database.
 data Value
   = TextValue !Text
-    -- ^ A Unicode text value.
-  | ByteStringValue !ByteString
-    -- ^ A vector of bytes. It might be binary, or a string, but we
-    -- don't know the encoding. Use 'Data.Text.Encoding.decodeUtf8' if
-    -- the string is UTF-8 encoded, or
-    -- 'Data.Text.Encoding.decodeUtf16LE' if it is UTF-16 encoded. For
-    -- other encodings, see the Haskell text-icu package.  For raw
-    -- binary, see 'BinaryValue'.
+    -- ^ A Unicode text value. This maps to nvarchar in SQL
+    -- Server. Use this for text.
   | BinaryValue !Binary
     -- ^ Only a vector of bytes. Intended for binary data, not for
-    -- ASCII text.
+    -- ASCII text. This maps to varbinary or binary in SQL Server.
+  | ByteStringValue !ByteString
+    -- ^ A vector of bytes. It might be binary, or a string, but we
+    -- don't know the encoding. It maps to @varchar@ in the database
+    -- in SQL Server.
+    --
+    -- DO NOT USE THIS TYPE IF YOU CAN AVOID IT: This type does not
+    -- have a reliable transmission via parameters, and therefore is
+    -- encoded within the query as @CHAR(x) + ...@  where x is a
+    -- character outside of alphanumeric characters.
+    --
+    -- If you must: Use 'Data.Text.Encoding.decodeUtf8' if the string
+    -- is UTF-8 encoded, or 'Data.Text.Encoding.decodeUtf16LE' if it
+    -- is UTF-16 encoded. For other encodings, see the Haskell
+    -- text-icu package.  For raw binary, see 'BinaryValue'.
   | BoolValue !Bool
     -- ^ A simple boolean.
   | DoubleValue !Double
