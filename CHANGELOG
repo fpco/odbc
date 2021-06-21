@@ -1,3 +1,6 @@
+0.2.6:
+	* Support large columns (i.e., those where the ODBC driver gives a size of SQL_NO_TOTAL)
+
 0.2.3:
 	* Support WCHAR
 

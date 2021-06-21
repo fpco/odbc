@@ -11,6 +11,7 @@
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE ForeignFunctionInterface #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 
 -- | ODBC database API.
 --
@@ -95,7 +96,7 @@ data ODBCException
   | DatabaseAlreadyClosed
     -- ^ You attempted to 'close' the database twice.
   | NoTotalInformation !Int
-    -- ^ No total length information for column.
+    -- ^ Unexpected lack of total length information for column.
   | DataRetrievalError !String
     -- ^ There was a general error retrieving data. String will
     -- contain the reason why.
@@ -201,6 +202,10 @@ data Column = Column
   , columnNull :: !SQLSMALLINT
   , columnName :: !Text
   } deriving (Show)
+
+mAX_bUFFER_sIZE :: Int64
+mAX_bUFFER_sIZE = 4096
+-- 4K "sounds good", otherwise this is pretty arbitrary.
 
 --------------------------------------------------------------------------------
 -- Exposed functions
@@ -834,77 +839,79 @@ getGuid dbc stmt column = do
             !bs <- S.unsafePackMallocCStringLen (bufferp, odbcGuidBytes)
             evaluate (BinaryValue (Binary bs)))
 
+getStringyData :: (Monoid m) 
+               => SQLCTYPE
+               -> (Int64 -> IO (Ptr CChar, Int64, Int64 -> a))
+               -> (Ptr CChar -> a -> IO m)
+               -> (m -> Value)
+               -> Ptr EnvAndDbc -> SQLHSTMT s -> SQLUSMALLINT 
+               -> IO Value
+getStringyData ctype alloc marshal wrap dbc stmt column = do
+  availableBytes <- getSize dbc stmt ctype column
+  case availableBytes of
+    KnownSize 0 -> pure $ wrap mempty
+    KnownSize bytes -> uninterruptibleMask_ $ do
+      (buffer, bufferSize, marshalParam) <- alloc bytes
+      _ <- getTypedData dbc stmt ctype column (coerce buffer) (SQLLEN bufferSize)
+      val <- marshal buffer (marshalParam bytes)
+      evaluate $ wrap val
+    UnknownSize -> uninterruptibleMask_ $ do
+      let 
+        go = do
+          (buffer, bufferSize, marshalParam) <- alloc mAX_bUFFER_sIZE
+          mSize <- getLongTypedData dbc stmt ctype column (coerce buffer) (SQLLEN bufferSize)
+          case mSize of
+            Just size -> do
+              realSize <- case size of
+                KnownSize bytes
+                  | bytes < mAX_bUFFER_sIZE -> pure bytes
+                NullSize -> throwIO $ DataRetrievalError $ "Unexpected null-sized value "
+                                                        ++ "after size check in column "
+                                                        ++ show column
+                _ -> pure mAX_bUFFER_sIZE
+              
+              val <- marshal buffer (marshalParam realSize)
+              x <- evaluate val
+              (x :) <$> go
+            Nothing -> pure []
+      wrap . mconcat <$> go
+    NullSize -> pure NullValue
+
 -- | Get the column's data as a vector of CHAR.
 getBytesData :: Ptr EnvAndDbc -> SQLHSTMT s -> SQLUSMALLINT -> IO Value
-getBytesData dbc stmt column = do
-  mavailableBytes <- getSize dbc stmt sql_c_binary column
-  case mavailableBytes of
-    Just 0 -> pure (ByteStringValue mempty)
-    Just availableBytes ->
-      uninterruptibleMask_
-        (do let allocBytes = availableBytes + 1
-            bufferp <- callocBytes (fromIntegral allocBytes)
-            void
-              (getTypedData
-                 dbc
-                 stmt
-                 sql_c_binary
-                 column
-                 (coerce bufferp)
-                 (SQLLEN (fromIntegral allocBytes)))
-            bs <-
-              S.unsafePackMallocCStringLen
-                (bufferp, fromIntegral availableBytes)
-            evaluate (ByteStringValue bs))
-    Nothing -> pure NullValue
+getBytesData = getStringyData sql_c_binary alloc marshalBS ByteStringValue
+  where
+    alloc size = do
+      let bufferSize = size + 1
+      ptr <- callocBytes (fromIntegral bufferSize)
+      return (ptr, bufferSize, fromIntegral)
 
 -- | Get the column's data as raw binary.
 getBinaryData :: Ptr EnvAndDbc -> SQLHSTMT s -> SQLUSMALLINT -> IO Value
-getBinaryData dbc stmt column = do
-  mavailableBinary <- getSize dbc stmt sql_c_binary column
-  case mavailableBinary of
-    Just 0 -> pure (BinaryValue (Binary mempty))
-    Just availableBinary ->
-      uninterruptibleMask_
-        (do let allocBinary = availableBinary
-            bufferp <- callocBytes (fromIntegral allocBinary)
-            void
-              (getTypedData
-                 dbc
-                 stmt
-                 sql_c_binary
-                 column
-                 (coerce bufferp)
-                 (SQLLEN (fromIntegral allocBinary)))
-            bs <-
-              S.unsafePackMallocCStringLen
-                (bufferp, fromIntegral availableBinary)
-            evaluate (BinaryValue (Binary bs)))
-    Nothing -> pure NullValue
+getBinaryData = getStringyData sql_c_binary alloc marshalBS (BinaryValue . Binary)
+  where
+    alloc size = do
+      ptr <- callocBytes (fromIntegral size)
+      return (ptr, size, fromIntegral)
+
+marshalBS :: Ptr CChar -> Int -> IO ByteString
+marshalBS = curry S.unsafePackMallocCStringLen
 
 -- | Get the column's data as a text string.
 getTextData :: Ptr EnvAndDbc -> SQLHSTMT s -> SQLUSMALLINT -> IO Value
-getTextData dbc stmt column = do
-  mavailableChars <- getSize dbc stmt sql_c_wchar column
-  case mavailableChars of
-    Just 0 -> pure (TextValue mempty)
-    Nothing -> pure NullValue
-    Just availableBytes -> do
-      let allocBytes = availableBytes + 2
-      withMallocBytes
-        (fromIntegral allocBytes)
-        (\bufferp -> do
-           void
-             (getTypedData
-                dbc
-                stmt
-                sql_c_wchar
-                column
-                (coerce bufferp)
-                (SQLLEN (fromIntegral allocBytes)))
-           t <- T.fromPtr bufferp (fromIntegral (div availableBytes 2))
-           let !v = TextValue t
-           pure v)
+getTextData = getStringyData sql_c_wchar alloc marshal TextValue
+  where
+    alloc size = do
+      let bufferSize = size + 2
+      ptr <- callocBytes (fromIntegral bufferSize)
+      return (ptr, bufferSize, (`div` 2))
+
+    marshal ptr size = T.fromPtr (castPtr ptr) (fromIntegral size)
+
+data DataSize = NullSize
+              | UnknownSize
+              | KnownSize Int64
+              deriving (Show, Eq)
 
 -- | Get some data into the given pointer.
 getTypedData ::
@@ -916,44 +923,45 @@ getTypedData ::
   -> SQLLEN
   -> IO (Maybe Int64)
 getTypedData dbc stmt ty column bufferp bufferlen =
-  withMalloc
-    (\copiedPtr -> do
-       assertSuccess
-         dbc
-         ("getTypedData ty=" ++ show ty)
-         (odbc_SQLGetData dbc stmt column ty bufferp bufferlen copiedPtr)
-       copiedBytes <- peek copiedPtr
-       if copiedBytes == sql_null_data
-         then pure Nothing
-         else pure (Just (coerce copiedBytes :: Int64)))
+  withMalloc $ \copiedPtr -> do
+    assertSuccess dbc ("getTypedData ty=" ++ show ty) $
+             odbc_SQLGetData dbc stmt column ty bufferp bufferlen copiedPtr
+    copiedBytes <- peek copiedPtr
+    if | copiedBytes == sql_null_data -> pure Nothing
+       | copiedBytes == sql_no_total  -> throwIO $ NoTotalInformation (fromIntegral column)
+       | otherwise                    -> pure $ Just (coerce copiedBytes)
+
+getLongTypedData ::
+     Ptr EnvAndDbc
+  -> SQLHSTMT s
+  -> SQLCTYPE
+  -> SQLUSMALLINT
+  -> SQLPOINTER
+  -> SQLLEN
+  -> IO (Maybe DataSize)
+getLongTypedData dbc stmt ty column bufferp bufferlen =
+  withMalloc $ \copiedPtr -> do
+    ret <- assertSuccessOrNoData dbc ("getLongTypedData ty=" ++ show ty) $
+             odbc_SQLGetData dbc stmt column ty bufferp bufferlen copiedPtr
+    copiedBytes <- peek copiedPtr
+    pure $ 
+      if | ret == sql_no_data           -> Nothing
+         | copiedBytes == sql_null_data -> Just NullSize
+         | copiedBytes == sql_no_total  -> Just UnknownSize
+         | otherwise                    -> Just (KnownSize $ coerce copiedBytes)
 
 -- | Get only the size of the data, no copying.
-getSize :: Ptr EnvAndDbc -> SQLHSTMT s -> SQLCTYPE -> SQLUSMALLINT -> IO (Maybe Int64)
+getSize :: Ptr EnvAndDbc -> SQLHSTMT s -> SQLCTYPE -> SQLUSMALLINT -> IO DataSize
 getSize dbc stmt ty column =
-  withMalloc
-    (\availablePtr -> do
-       withMalloc
-         (\bufferp ->
-            assertSuccess
-              dbc
-              "getSize"
-              (odbc_SQLGetData
-                 dbc
-                 stmt
-                 column
-                 ty
-                 (coerce (bufferp :: Ptr CChar))
-                 0
-                 availablePtr))
-       availableBytes <- peek availablePtr
-       if availableBytes == sql_null_data
-         then pure Nothing
-         else if availableBytes == sql_no_total
-                then throwIO
-                       (NoTotalInformation
-                          (let SQLUSMALLINT i = column
-                           in fromIntegral i))
-                else pure (Just (coerce availableBytes :: Int64)))
+  withMalloc $ \availablePtr -> do
+    withMalloc $ \(bufferp :: Ptr CChar) ->
+        assertSuccess dbc "getSize" $
+          odbc_SQLGetData dbc stmt column ty (coerce bufferp) 0 availablePtr
+    availableBytes <- peek availablePtr
+    pure $ 
+      if | availableBytes == sql_null_data -> NullSize
+         | availableBytes == sql_no_total  -> UnknownSize
+         | otherwise                       -> KnownSize $ coerce availableBytes
 
 --------------------------------------------------------------------------------
 -- Correctness checks
