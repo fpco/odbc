@@ -1016,7 +1016,7 @@ newtype SQLCTYPE =
   deriving (Show, Eq, Storable, Integral, Enum, Real, Num, Ord)
 
 -- https://github.com/Microsoft/ODBC-Specification/blob/753d7e714b7eab9eaab4ad6105fdf4267d6ad6f6/Windows/inc/sqltypes.h#L152
-newtype RETCODE = RETCODE Int16
+newtype RETCODE = RETCODE CShort
   deriving (Show, Eq)
 
 -- https://github.com/Microsoft/ODBC-Specification/blob/753d7e714b7eab9eaab4ad6105fdf4267d6ad6f6/Windows/inc/sqltypes.h#L89
