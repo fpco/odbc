@@ -407,10 +407,11 @@ withExecDirect dbc string params cont =
 
 -- | Run the function with a statement.
 withStmt :: Ptr EnvAndDbc -> (forall s. SQLHSTMT s -> IO a) -> IO a
-withStmt hdbc =
+withStmt hdbc cont =
   bracket
     (assertNotNull "odbc_SQLAllocStmt" (odbc_SQLAllocStmt hdbc))
     odbc_SQLFreeStmt
+    cont
 
 -- | Run an action in a bound thread. This is neccessary due to the
 -- interaction with signals in ODBC and GHC's runtime.
