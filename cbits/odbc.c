@@ -13,7 +13,7 @@
 
 #define FALSE 0
 #define TRUE 1
-#define MAXBUFLEN 512
+#define MAXBUFLEN 1024
 
 // Just a way of grouping together these two dependent resources. It's
 // probably not a good idea to free up an environment before freeing a
@@ -23,6 +23,7 @@ typedef struct EnvAndDbc {
   SQLHENV *env;
   SQLHDBC *dbc;
   char *error;
+  // Allocated once in odbc_AllocEnvAndDbc and freed once in odbc_FreeEnvAndDbc.
 } EnvAndDbc;
 
 char *odbc_error(EnvAndDbc *envAndDbc){
@@ -100,7 +101,7 @@ EnvAndDbc *odbc_AllocEnvAndDbc(){
         EnvAndDbc *envAndDbc = malloc(sizeof *envAndDbc);
         envAndDbc->env = env;
         envAndDbc->dbc = dbc;
-        envAndDbc->error = NULL;
+        envAndDbc->error = malloc(MAXBUFLEN);
         return envAndDbc;
       }
     }
@@ -264,33 +265,29 @@ RETCODE odbc_SQLNumResultCols(SQLHSTMT *hstmt, SQLSMALLINT *cols){
 // Logs
 
 void odbc_ProcessLogMessages(EnvAndDbc *envAndDbc, SQLSMALLINT plm_handle_type, SQLHANDLE plm_handle, char *logstring, int ConnInd) {
-  RETCODE plm_retcode = SQL_SUCCESS;
+  // It has been fully tested that trying anything beyond 1 produces
+  // the same string.
+  SQLSMALLINT plg_record_number = 1;
+  // The subtract-1 leaves space for zero-termination.
+  SQLSMALLINT copy_this_many_bytes = MAXBUFLEN - 1;
+
+  // These are not interesting for our use-case, but needed by
+  // SQLGetDiagRec:
   UCHAR plm_szSqlState[MAXBUFLEN] = "";
   SDWORD plm_pfNativeError = 0L;
   SWORD plm_pcbErrorMsg = 0;
-  SQLSMALLINT plm_cRecNmbr = 1;
 
-  // Temporary buffer for each message
-  char *msg[MAXBUFLEN];
-
-  // Reset the error buffer
-  free(envAndDbc->error);
-  envAndDbc->error = NULL;
-  unsigned long errors_strlen = 0;
-
-  while (plm_retcode != SQL_NO_DATA_FOUND) {
-    plm_retcode = SQLGetDiagRec(plm_handle_type, plm_handle, plm_cRecNmbr,
-                                plm_szSqlState, &plm_pfNativeError, (SQLCHAR *)msg,
-                                MAXBUFLEN - 1, &plm_pcbErrorMsg);
-    unsigned long msg_strlen = strlen((const char*)msg);
-    // If there is something to copy, copy it onto the error buffer.
-    if (msg_strlen > 0) {
-      envAndDbc->error = realloc(envAndDbc->error, errors_strlen + msg_strlen + 1);
-      strncpy(envAndDbc->error + errors_strlen, (const char*) msg, msg_strlen);
-      errors_strlen += msg_strlen;
-    }
-    plm_cRecNmbr++;
-  }
+  // Copy the error into: envAndDbc->error
+  //
+  // This may fail, but in that case there's no useful error message.
+  SQLGetDiagRec(plm_handle_type,
+                plm_handle,
+                plg_record_number,
+                plm_szSqlState,
+                &plm_pfNativeError,
+                (SQLCHAR *)envAndDbc->error,
+                copy_this_many_bytes,
+                &plm_pcbErrorMsg);
 }
 
 ////////////////////////////////////////////////////////////////////////////////
