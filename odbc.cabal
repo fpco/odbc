@@ -58,6 +58,18 @@ executable odbc
     text,
     optparse-applicative
 
+executable odbc-params
+  hs-source-dirs:    app
+  main-is:           Params.hs
+  ghc-options:       -Wall -O2 -threaded
+  default-language:  Haskell2010
+  build-depends:
+    base >= 4.7 && < 5,
+    odbc,
+    bytestring,
+    text,
+    optparse-applicative
+
 test-suite test
   default-language:  Haskell2010
   type: exitcode-stdio-1.0

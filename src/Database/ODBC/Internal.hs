@@ -171,7 +171,7 @@ instance Hashable Value where
 data Param
   = TextParam !Text -- ^ See docs for 'TextValue'.
   | BinaryParam !Binary -- ^ See docs for 'BinaryValue'.
-  deriving (Eq, Show, Typeable, Ord, Generic, Data)
+  deriving (Eq, Show, Typeable, Ord, Generic, Data, Read)
 instance NFData Param
 
 -- | A simple newtype wrapper around the 'ByteString' type to use when
@@ -182,7 +182,7 @@ instance NFData Param
 -- type.
 newtype Binary = Binary
   { unBinary :: ByteString
-  } deriving (Show, Eq, Ord, Data, Generic, Typeable, NFData)
+  } deriving (Show, Eq, Ord, Data, Generic, Typeable, NFData, Read)
 
 -- | A step in the streaming process for the 'stream' function.
 data Step a
