@@ -81,8 +81,9 @@ newtype Connection = Connection
 -- throw this exception type.
 data ODBCException
   = UnsuccessfulReturnCode !String
-                           !Int16
-                           !String
+                           !Int16 -- ^ Return code
+                           !String -- ^ Error message
+                           !(Maybe String) -- ^ SQL state code
     -- ^ An ODBC operation failed with the given return code.
   | AllocationReturnedNull !String
     -- ^ Allocating an ODBC resource failed.
@@ -521,12 +522,14 @@ fetchIterator dbc (UnliftIO runInIO) step state0 stmt = do
                    case state' of
                      Stop state'' -> pure state''
                      Continue state'' -> loop state''
-              | otherwise ->
+              | otherwise -> do
+                sqlState <- fetchSqlState dbc
                 throwIO
                   (UnsuccessfulReturnCode
                      "odbc_SQLFetch"
                      (coerce retcode0)
-                     "Unexpected return code")
+                     "Unexpected return code"
+                     sqlState)
   if cols > 0
     then loop state0
     else pure state0
@@ -567,12 +570,14 @@ fetchStatementRows dbc stmt = do
                      sequence
                        (zipWith (getData dbc stmt) [SQLUSMALLINT 1 ..] types)
                    loop (rows . (fields :))
-              | otherwise ->
+              | otherwise -> do
+                sqlState <- fetchSqlState dbc
                 throwIO
                   (UnsuccessfulReturnCode
                      "odbc_SQLFetch"
                      (coerce retcode0)
-                     "Unexpected return code")
+                     "Unexpected return code"
+                     sqlState)
   if cols > 0
     then loop id
     else pure []
@@ -979,7 +984,8 @@ assertSuccess dbc label m = do
         if nullPtr == ptr
           then pure "No error message given from ODBC."
           else peekCString ptr
-      throwIO (UnsuccessfulReturnCode label (coerce retcode) string)
+      sqlState <- fetchSqlState dbc
+      throwIO (UnsuccessfulReturnCode label (coerce retcode) string sqlState)
 
 -- | Check that the RETCODE is successful or no data.
 assertSuccessOrNoData :: Ptr EnvAndDbc -> String -> IO RETCODE -> IO RETCODE
@@ -994,7 +1000,16 @@ assertSuccessOrNoData dbc label m = do
         if nullPtr == ptr
           then pure ""
           else peekCString ptr
-      throwIO (UnsuccessfulReturnCode label (coerce retcode) string)
+      sqlState <- fetchSqlState dbc
+      throwIO (UnsuccessfulReturnCode label (coerce retcode) string sqlState)
+
+-- | Fetch SQLSTATE, an alphanumeric code which provides detailed information about the cause of a warning or error.
+fetchSqlState :: Ptr EnvAndDbc -> IO (Maybe String)
+fetchSqlState dbc = do
+  ptr <- odbc_sqlState dbc
+  if nullPtr == ptr
+    then pure Nothing
+    else Just <$> peekCString ptr
 
 --------------------------------------------------------------------------------
 -- Foreign types
@@ -1062,6 +1077,9 @@ data TIMESTAMP_STRUCT
 
 foreign import ccall "odbc odbc_error"
   odbc_error :: Ptr EnvAndDbc -> IO (Ptr CChar)
+
+foreign import ccall "odbc odbc_sqlState"
+  odbc_sqlState :: Ptr EnvAndDbc -> IO (Ptr CChar)
 
 foreign import ccall "odbc odbc_AllocEnvAndDbc"
   odbc_AllocEnvAndDbc :: IO (Ptr EnvAndDbc)
