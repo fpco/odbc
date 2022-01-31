@@ -106,8 +106,8 @@ EnvAndDbc *odbc_AllocEnvAndDbc(){
         EnvAndDbc *envAndDbc = malloc(sizeof *envAndDbc);
         envAndDbc->env = env;
         envAndDbc->dbc = dbc;
-        envAndDbc->error = malloc(MAXBUFLEN);
-        envAndDbc->sqlState = malloc(MAXBUFLEN);
+        envAndDbc->error = malloc(SQL_MAX_MESSAGE_LENGTH);
+        envAndDbc->sqlState = malloc(6);
         return envAndDbc;
       }
     }
