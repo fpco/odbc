@@ -58,7 +58,6 @@ import qualified Data.ByteString.Unsafe as S
 import           Data.Coerce
 import           Data.Data
 import           Data.Hashable
-import           Data.Int
 import           Data.String
 import           Data.Text (Text)
 import qualified Data.Text as T
@@ -81,13 +80,13 @@ newtype Connection = Connection
 -- throw this exception type.
 data ODBCException
   = UnsuccessfulReturnCode !String
-                           !Int16
+                           !CShort
                            !String
     -- ^ An ODBC operation failed with the given return code.
   | AllocationReturnedNull !String
     -- ^ Allocating an ODBC resource failed.
   | UnknownDataType !String
-                    !Int16
+                    !CShort
     -- ^ An unsupported/unknown data type was returned from the ODBC
     -- driver.
   | DatabaseIsClosed !String
@@ -578,7 +577,7 @@ fetchStatementRows dbc stmt = do
     else pure []
 
 -- | Describe the given column by its integer index.
-describeColumn :: Ptr EnvAndDbc -> SQLHSTMT s -> Int16 -> IO Column
+describeColumn :: Ptr EnvAndDbc -> SQLHSTMT s -> CShort -> IO Column
 describeColumn dbPtr stmt i =
   T.useAsPtr
     (T.replicate 1000 (fromString "0"))
@@ -1014,24 +1013,24 @@ newtype SQLPOINTER = SQLPOINTER (Ptr SQLPOINTER)
 
 -- | A type that maps to https://docs.microsoft.com/en-us/sql/odbc/reference/appendixes/c-data-types
 newtype SQLCTYPE =
-  SQLCTYPE Int16
+  SQLCTYPE SQLSMALLINT
   deriving (Show, Eq, Storable, Integral, Enum, Real, Num, Ord)
 
 -- https://github.com/Microsoft/ODBC-Specification/blob/753d7e714b7eab9eaab4ad6105fdf4267d6ad6f6/Windows/inc/sqltypes.h#L152
-newtype RETCODE = RETCODE Int16
+newtype RETCODE = RETCODE CShort
   deriving (Show, Eq)
 
 -- https://github.com/Microsoft/ODBC-Specification/blob/753d7e714b7eab9eaab4ad6105fdf4267d6ad6f6/Windows/inc/sqltypes.h#L89
-newtype SQLUSMALLINT = SQLUSMALLINT Word16 deriving (Show, Eq, Storable, Integral, Enum, Real, Num, Ord)
+newtype SQLUSMALLINT = SQLUSMALLINT CUShort deriving (Show, Eq, Storable, Integral, Enum, Real, Num, Ord)
 
 -- https://github.com/Microsoft/ODBC-Specification/blob/753d7e714b7eab9eaab4ad6105fdf4267d6ad6f6/Windows/inc/sqltypes.h#L52..L52
-newtype SQLUCHAR = SQLUCHAR Word8 deriving (Show, Eq, Storable)
+newtype SQLUCHAR = SQLUCHAR CUChar deriving (Show, Eq, Storable)
 
 -- https://github.com/Microsoft/ODBC-Specification/blob/753d7e714b7eab9eaab4ad6105fdf4267d6ad6f6/Windows/inc/sqltypes.h#L52..L52
 newtype SQLCHAR = SQLCHAR CChar deriving (Show, Eq, Storable)
 
 -- https://github.com/Microsoft/ODBC-Specification/blob/753d7e714b7eab9eaab4ad6105fdf4267d6ad6f6/Windows/inc/sqltypes.h#L88
-newtype SQLSMALLINT = SQLSMALLINT Int16 deriving (Show, Eq, Storable, Num, Integral, Enum, Ord, Real)
+newtype SQLSMALLINT = SQLSMALLINT CShort deriving (Show, Eq, Storable, Num, Integral, Enum, Ord, Real)
 
 -- https://github.com/Microsoft/ODBC-Specification/blob/753d7e714b7eab9eaab4ad6105fdf4267d6ad6f6/Windows/inc/sqltypes.h#L64
 newtype SQLLEN = SQLLEN Int64 deriving (Show, Eq, Storable, Num)
