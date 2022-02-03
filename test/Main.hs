@@ -527,7 +527,7 @@ connectWithString = do
       error
         "Need ODBC_TEST_CONNECTION_STRING environment variable.\n\
         \Example:\n\
-        \ODBC_TEST_CONNECTION_STRING='DRIVER={ODBC Driver 13 for SQL Server};SERVER=127.0.0.1;Uid=SA;Pwd=Passw0rd;Encrypt=no'"
+        \ODBC_TEST_CONNECTION_STRING='DRIVER={ODBC Driver 17 for SQL Server};SERVER=127.0.0.1;Uid=SA;Pwd=Passw0rd;Encrypt=no'"
 
 -- | I had trouble passing in environment variables via Docker on
 -- Travis without the value coming in with quotes around it.
