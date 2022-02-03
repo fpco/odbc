@@ -23,11 +23,16 @@ typedef struct EnvAndDbc {
   SQLHENV *env;
   SQLHDBC *dbc;
   char *error;
+  char *sqlState;
   // Allocated once in odbc_AllocEnvAndDbc and freed once in odbc_FreeEnvAndDbc.
 } EnvAndDbc;
 
 char *odbc_error(EnvAndDbc *envAndDbc){
   return envAndDbc->error;
+}
+
+char *odbc_sqlState(EnvAndDbc *envAndDbc){
+  return envAndDbc->sqlState;
 }
 
 void odbc_ProcessLogMessages(EnvAndDbc *envAndDbc, SQLSMALLINT plm_handle_type, SQLHANDLE plm_handle, char *logstring, int ConnInd);
@@ -101,7 +106,9 @@ EnvAndDbc *odbc_AllocEnvAndDbc(){
         EnvAndDbc *envAndDbc = malloc(sizeof *envAndDbc);
         envAndDbc->env = env;
         envAndDbc->dbc = dbc;
-        envAndDbc->error = malloc(MAXBUFLEN);
+        envAndDbc->error = malloc(SQL_MAX_MESSAGE_LENGTH);
+        # SQLSTATE is a five-character code, see https://docs.microsoft.com/en-us/sql/odbc/reference/appendixes/appendix-a-odbc-error-codes?view=sql-server-ver15
+        envAndDbc->sqlState = malloc(6);
         return envAndDbc;
       }
     }
@@ -110,6 +117,7 @@ EnvAndDbc *odbc_AllocEnvAndDbc(){
 
 void odbc_FreeEnvAndDbc(EnvAndDbc *envAndDbc){
   free(envAndDbc->error);
+  free(envAndDbc->sqlState);
   odbc_SQLFreeDbc(envAndDbc->dbc);
   odbc_SQLFreeEnv(envAndDbc->env);
   free(envAndDbc);
@@ -273,7 +281,6 @@ void odbc_ProcessLogMessages(EnvAndDbc *envAndDbc, SQLSMALLINT plm_handle_type, 
 
   // These are not interesting for our use-case, but needed by
   // SQLGetDiagRec:
-  UCHAR plm_szSqlState[MAXBUFLEN] = "";
   SDWORD plm_pfNativeError = 0L;
   SWORD plm_pcbErrorMsg = 0;
 
@@ -283,7 +290,7 @@ void odbc_ProcessLogMessages(EnvAndDbc *envAndDbc, SQLSMALLINT plm_handle_type, 
   SQLGetDiagRec(plm_handle_type,
                 plm_handle,
                 plg_record_number,
-                plm_szSqlState,
+                (SQLCHAR *)envAndDbc->sqlState,
                 &plm_pfNativeError,
                 (SQLCHAR *)envAndDbc->error,
                 copy_this_many_bytes,
