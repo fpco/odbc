@@ -107,6 +107,7 @@ EnvAndDbc *odbc_AllocEnvAndDbc(){
         envAndDbc->env = env;
         envAndDbc->dbc = dbc;
         envAndDbc->error = malloc(SQL_MAX_MESSAGE_LENGTH);
+        # SQLSTATE is a five-character code, see https://docs.microsoft.com/en-us/sql/odbc/reference/appendixes/appendix-a-odbc-error-codes?view=sql-server-ver15
         envAndDbc->sqlState = malloc(6);
         return envAndDbc;
       }
