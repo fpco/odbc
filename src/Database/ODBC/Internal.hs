@@ -83,7 +83,7 @@ data ODBCException
   = UnsuccessfulReturnCode !String
                            !Int16 -- ^ Return code
                            !String -- ^ Error message
-                           !(Maybe String) -- ^ SQL state code
+                           !(Maybe String) -- ^ SQL state code, see https://docs.microsoft.com/en-us/sql/odbc/reference/appendixes/appendix-a-odbc-error-codes?view=sql-server-ver15
     -- ^ An ODBC operation failed with the given return code.
   | AllocationReturnedNull !String
     -- ^ Allocating an ODBC resource failed.
@@ -1003,7 +1003,8 @@ assertSuccessOrNoData dbc label m = do
       sqlState <- fetchSqlState dbc
       throwIO (UnsuccessfulReturnCode label (coerce retcode) string sqlState)
 
--- | Fetch SQLSTATE, an alphanumeric code which provides detailed information about the cause of a warning or error.
+-- | Fetch SQLSTATE, an alphanumeric code which provides detailed information about the cause of a warning or error
+-- see https://docs.microsoft.com/en-us/sql/odbc/reference/appendixes/appendix-a-odbc-error-codes?view=sql-server-ver15
 fetchSqlState :: Ptr EnvAndDbc -> IO (Maybe String)
 fetchSqlState dbc = do
   ptr <- odbc_sqlState dbc
