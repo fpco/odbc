@@ -1,0 +1,40 @@
+on:
+    pull_request:
+    push:
+        branches:
+        - master
+
+jobs:
+  build:
+    name: CI
+    runs-on: ${{ matrix.os }}
+    services:
+      mysql:
+        image: mcr.microsoft.com/mssql/server:2019-latest@sha256:a098c9ff6fbb8e1c9608ad7511fa42dba8d22e0d50b48302761717840ccc26af
+        env:
+          ACCEPT_EULA: "Y"
+          SA_PASSWORD: "Passw0rd"
+        ports:
+          - 1433:1433
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+        - os: ubuntu-20.04
+        # can't run tests on Windows as "Container operations are only supported on Linux runners"
+        #- os: windows-2019
+    steps:
+      - name: Clone project
+        uses: actions/checkout@v2
+      - name: Cache dependencies
+        uses: actions/cache@v2
+        with:
+          path: ~/.stack
+          key: ${{ runner.os }}
+      - name: Build and run tests
+        shell: bash
+        run: |
+            set -ex
+            stack upgrade
+            stack --version
+            ODBC_TEST_CONNECTION_STRING='DRIVER={ODBC Driver 17 for SQL Server};SERVER=127.0.0.1;Uid=SA;Pwd=Passw0rd;Encrypt=no' stack test

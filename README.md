@@ -1,4 +1,4 @@
-# odbc [![Build Status](https://travis-ci.org/fpco/odbc.svg)](https://travis-ci.org/fpco/odbc) [![Build status](https://ci.appveyor.com/api/projects/status/vpn6a1pme25upbux?svg=true)](https://ci.appveyor.com/project/chrisdone/odbc-0os0b)
+# odbc [![Build Status](https://github.com/fpco/odbc/actions/workflows/workflow.yml/badge.svg?branch=master)](https://github.com/fpco/odbc/actions) [![Build status](https://ci.appveyor.com/api/projects/status/vpn6a1pme25upbux?svg=true)](https://ci.appveyor.com/project/chrisdone/odbc-0os0b)
 
 Haskell binding to the ODBC API, with a strong emphasis on stability,
 testing and simplicity.
@@ -7,15 +7,12 @@ testing and simplicity.
 
 The following database drivers are tested against in CI:
 
-* Microsoft SQL Server 2017
+* Microsoft SQL Server 2019
 
 The following operating systems are tested against in CI:
 
 * Windows [![Build status](https://ci.appveyor.com/api/projects/status/vpn6a1pme25upbux?svg=true)](https://ci.appveyor.com/project/chrisdone/odbc-0os0b)
-* Linux [![Build Status](https://travis-ci.org/fpco/odbc.svg)](https://travis-ci.org/fpco/odbc)
-
-I develop and test this library on OS X, but currently do not have a
-reliable way to run Microsoft SQL Server on Travis CI.
+* Linux [![Build Status](https://github.com/fpco/odbc/actions/workflows/workflow.yml/badge.svg?branch=master)](https://github.com/fpco/odbc/actions)
 
 ## How ODBC works
 
