@@ -1,4 +1,11 @@
-0.2.3:
+0.2.6:
+	* Add support for SQLSTATE
+	* Fix copying issues for error messages
+	* Add support for GHC 9.0
+0.2.5:
+	* Add binding of parameters for text/binary
+	* Fix null uniqueidentifier returning non-null value
+	* Include column names in output
 	* Support WCHAR
 
 0.2.2:
