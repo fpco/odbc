@@ -155,3 +155,4 @@ use driver 13 or [see here for more detail](https://github.com/fpco/odbc/issues/
 * Spencer Janssen
 * Yo Eight
 * Marco Z
+* Rakesh Emmadi
