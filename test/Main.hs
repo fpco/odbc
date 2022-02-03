@@ -118,7 +118,7 @@ regressions = do
         shouldThrow
           (Internal.exec c "SELECT 1; SELECT nothing FROM doesntexist")
           (\case
-             Internal.UnsuccessfulReturnCode "odbc_SQLMoreResults" (-1) _ ->
+             Internal.UnsuccessfulReturnCode "odbc_SQLMoreResults" (-1) _ _ ->
                True
              _ -> False))
 
