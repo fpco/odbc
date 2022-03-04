@@ -163,6 +163,7 @@ instance Hashable Value where
       DayValue x -> hashWithSalt salt (show x)
       TimeOfDayValue !x -> hashWithSalt salt (show  x)
       LocalTimeValue x -> hashWithSalt salt (show  x)
+      ZonedTimeValue x y -> hashWithSalt salt (show (ZonedTime x y))
       NullValue -> hashWithSalt salt ()
 
 -- | A parameter to a query that corresponds to a ?.
