@@ -1,3 +1,7 @@
-resolver: nightly-2020-09-18
+resolver: lts-18.28
 packages:
 - .
+
+nix:
+  packages:
+  - unixODBC
