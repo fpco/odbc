@@ -272,17 +272,21 @@ newtype Smalldatetime = Smalldatetime
   { unSmalldatetime :: LocalTime
   } deriving (Eq, Ord, Show, Typeable, Generic, Data, FromValue)
 
+-- | Use this type to discard the 'timeZoneMinutes' and 'timeZoneName'
+-- components of a 'ZonedTime'.
+--
+-- <https://docs.microsoft.com/en-us/sql/t-sql/data-types/datetimeoffset-transact-sql?view=sql-server-2017>
 newtype Datetimeoffset = Datetimeoffset
   { unDatetimeoffset :: ZonedTime
   } deriving (Show, Typeable, Generic, Data, FromValue)
 
--- SQL Server considers two datetimeoffset values to be equal as long as they
+-- | SQL Server considers two datetimeoffset values to be equal as long as they
 -- represent the same instant in time; i.e. they are equavalent to the same UTC
 -- time and date. This instance reproduces that behaviour.
 instance Eq Datetimeoffset where
   Datetimeoffset x == Datetimeoffset y = zonedTimeToUTC x == zonedTimeToUTC y
 
--- SQL Server considers datetimeoffset values to be ordered according to their
+-- | SQL Server considers datetimeoffset values to be ordered according to their
 -- UTC equivalent values. This instance reproduces that behaviour.
 instance Ord Datetimeoffset where
   compare (Datetimeoffset x) (Datetimeoffset y) =
@@ -411,6 +415,9 @@ instance ToSql Smalldatetime where
       shrink (LocalTime dd (TimeOfDay hh mm _ss)) =
         LocalTime dd (TimeOfDay hh mm 0)
 
+-- | Corresponds to DATETIMEOFFSET type of SQL Server. The
+-- 'timeZoneSummerOnly' and 'timeZoneName' components will be lost when
+-- serializing to SQL.
 instance ToSql Datetimeoffset where
   toSql (Datetimeoffset (ZonedTime lt tzone)) = toSql $ ZonedTimeValue lt tzone
 
