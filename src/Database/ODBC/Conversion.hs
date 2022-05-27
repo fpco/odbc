@@ -116,6 +116,12 @@ instance FromValue LocalTime where
        LocalTimeValue x -> pure (id x)
        v -> Left ("Expected LocalTime, but got: " ++ show v))
 
+instance FromValue ZonedTime where
+  fromValue =
+    (\case
+       ZonedTimeValue lt tz -> pure (ZonedTime lt tz)
+       v -> Left ("Expected ZonedTime, but got: " ++ show v))
+
 --------------------------------------------------------------------------------
 -- Producing rows
 

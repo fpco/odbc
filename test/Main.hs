@@ -38,7 +38,7 @@ import           Data.Word
 import           Database.ODBC.Conversion (FromValue(..))
 import           Database.ODBC.Internal (Value (..), Connection, ODBCException(..), Step(..), Binary)
 import qualified Database.ODBC.Internal as Internal
-import           Database.ODBC.SQLServer (splitQueryParametrized, joinQueryParametrized, Datetime2(..), Smalldatetime(..), ToSql(..))
+import           Database.ODBC.SQLServer (splitQueryParametrized, joinQueryParametrized, Datetime2(..), Datetimeoffset(..), Smalldatetime(..), ToSql(..))
 import qualified Database.ODBC.SQLServer as SQLServer
 import           Database.ODBC.TH (partsParser, Part(..))
 import           System.Environment
@@ -149,6 +149,7 @@ conversionTo = do
   quickCheckRoundtrip @Datetime2 "Datetime2" "datetime2"
   quickCheckRoundtrip @Smalldatetime "Smalldatetime" "smalldatetime"
   quickCheckRoundtrip @TestDateTime "TestDateTime" "datetime"
+  quickCheckRoundtrip @Datetimeoffset "Datetimeoffset" "datetimeoffset"
   quickCheckOneway @TimeOfDay "TimeOfDay" "time"
   quickCheckRoundtrip @TestTimeOfDay "TimeOfDay" "time"
   quickCheckRoundtrip @Float "Float" "real"
@@ -743,3 +744,13 @@ instance Arbitrary Smalldatetime where
     pure
       (Smalldatetime
          (LocalTime day (timeToTimeOfDay (secondsToDiffTime (minutes * 60)))))
+
+instance Arbitrary Datetimeoffset where
+  arbitrary = do
+    lt <- arbitrary
+    -- Pick a time zone offset between -12 hours and +14 hours. According to
+    -- https://en.wikipedia.org/wiki/List_of_UTC_time_offsets the lowest offset
+    -- is -12 hours (at Baker Island and Howland Island), while the highest
+    -- offset is +14 hours (at Line Islands).
+    offset <- choose (-12 * 60, 14 * 60)
+    return $ Datetimeoffset $ ZonedTime lt $ TimeZone offset False ""
