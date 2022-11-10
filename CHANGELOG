@@ -1,5 +1,6 @@
 0.2.7:
 	* Add support for DATETIMEOFFSET
+	* Add exec variant returning number of affected rows
 0.2.6:
 	* Add support for SQLSTATE
 	* Fix copying issues for error messages

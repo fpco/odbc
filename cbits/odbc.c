@@ -270,6 +270,13 @@ RETCODE odbc_SQLNumResultCols(SQLHSTMT *hstmt, SQLSMALLINT *cols){
 }
 
 ////////////////////////////////////////////////////////////////////////////////
+// Get rows
+
+RETCODE odbc_SQLRowCount(SQLHSTMT *hstmt, SQLLEN *rows){
+  return SQLRowCount(*hstmt, rows);
+}
+
+////////////////////////////////////////////////////////////////////////////////
 // Logs
 
 void odbc_ProcessLogMessages(EnvAndDbc *envAndDbc, SQLSMALLINT plm_handle_type, SQLHANDLE plm_handle, char *logstring, int ConnInd) {

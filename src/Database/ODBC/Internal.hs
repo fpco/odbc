@@ -29,6 +29,7 @@ module Database.ODBC.Internal
   , Connection
     -- * Executing queries
   , exec
+  , exec'
   , query
   , Value(..)
   , Binary(..)
@@ -38,6 +39,7 @@ module Database.ODBC.Internal
   , Step(..)
     -- * Parameters
   , execWithParams
+  , execWithParams'
   , queryWithParams
   , streamWithParams
   , Param(..)
@@ -280,6 +282,17 @@ exec ::
   -> m ()
 exec conn string = execWithParams conn string mempty
 
+-- | Execute a statement on the database and returns number of affected rows.
+--
+-- @since 0.2.7
+exec' ::
+     MonadIO m
+  => Connection -- ^ A connection to the database.
+  -> Text -- ^ SQL statement.
+  -> m Int
+exec' conn string = execWithParams' conn string mempty
+{-# INLINE exec' #-}
+
 -- | Same as 'exec' but with parameters.
 --
 -- @since 0.2.4
@@ -295,6 +308,22 @@ execWithParams conn string params =
        conn
        "exec"
        (\dbc -> withExecDirect dbc string params (fetchAllResults dbc)))
+
+-- | Same as 'execWithParams' but returns number of affected rows.
+--
+-- @since 0.2.7
+execWithParams' ::
+     MonadIO m
+  => Connection -- ^ A connection to the database.
+  -> Text -- ^ SQL query with ? inside.
+  -> [Param] -- ^ Params matching the ? in the query string.
+  -> m Int
+execWithParams' conn string params =
+  withBound
+    (withHDBC
+       conn
+       "exec"
+       (\dbc -> withExecDirect dbc string params (fetchAllResults' dbc)))
 
 -- | Query and return a list of rows.
 query ::
@@ -548,6 +577,31 @@ fetchAllResults dbc stmt = do
   when
     (retcode == sql_success || retcode == sql_success_with_info)
     (fetchAllResults dbc stmt)
+
+-- | Fetch all results from possible multiple statements.
+fetchAllResults' :: Ptr EnvAndDbc -> SQLHSTMT s -> IO Int
+fetchAllResults' dbc stmt = go 0
+  where
+    go !rowsTotal = do
+      rows <- countRows
+      retcode <-
+        assertSuccessOrNoData
+          dbc
+          "odbc_SQLMoreResults"
+          (odbc_SQLMoreResults dbc stmt)
+      if retcode == sql_success || retcode == sql_success_with_info
+        then go (rowsTotal + rows)
+        else pure (rowsTotal + rows)
+    countRows = do
+      SQLLEN rows <-
+        withMalloc
+          (\sizep -> do
+             assertSuccess
+               dbc
+               "odbc_SQLRowCount"
+               (odbc_SQLRowCount stmt sizep)
+             peek sizep)
+      pure $! fromIntegral rows
 
 -- | Fetch all rows from a statement.
 fetchStatementRows :: Ptr EnvAndDbc -> SQLHSTMT s -> IO [[(Column,Value)]]
@@ -1089,7 +1143,7 @@ newtype SQLCHAR = SQLCHAR CChar deriving (Show, Eq, Storable)
 -- https://github.com/Microsoft/ODBC-Specification/blob/753d7e714b7eab9eaab4ad6105fdf4267d6ad6f6/Windows/inc/sqltypes.h#L88
 newtype SQLSMALLINT = SQLSMALLINT Int16 deriving (Show, Eq, Storable, Num, Integral, Enum, Ord, Real)
 
--- https://github.com/Microsoft/ODBC-Specification/blob/753d7e714b7eab9eaab4ad6105fdf4267d6ad6f6/Windows/inc/sqltypes.h#L64
+-- https://github.com/Microsoft/ODBC-Specification/blob/753d7e714b7eab9eaab4ad6105fdf4267d6ad6f6/Windows/inc/sqltypes.h#L641
 newtype SQLLEN = SQLLEN Int64 deriving (Show, Eq, Storable, Num)
 
 -- https://github.com/Microsoft/ODBC-Specification/blob/753d7e714b7eab9eaab4ad6105fdf4267d6ad6f6/Windows/inc/sqltypes.h#L65..L65
@@ -1167,6 +1221,9 @@ foreign import ccall "odbc odbc_SQLMoreResults"
 
 foreign import ccall "odbc odbc_SQLNumResultCols"
   odbc_SQLNumResultCols :: SQLHSTMT s -> Ptr SQLSMALLINT -> IO RETCODE
+
+foreign import ccall "odbc odbc_SQLRowCount"
+  odbc_SQLRowCount :: SQLHSTMT s -> Ptr SQLLEN -> IO RETCODE
 
 foreign import ccall "odbc odbc_SQLGetData"
  odbc_SQLGetData

@@ -25,6 +25,7 @@ module Database.ODBC.SQLServer
 
     -- * Executing queries
   , exec
+  , exec'
   , query
   , Value(..)
   , Query
@@ -481,6 +482,17 @@ exec ::
 exec c q = Internal.execWithParams c rendered params
   where
     (rendered, params) = renderedAndParams q
+
+-- | Execute a statement on the database and return number of affected rows.
+exec' ::
+     MonadIO m
+  => Connection -- ^ A connection to the database.
+  -> Query -- ^ SQL statement.
+  -> m Int
+exec' c q = Internal.execWithParams' c rendered params
+  where
+    (rendered, params) = renderedAndParams q
+{-# INLINE exec' #-}
 
 --------------------------------------------------------------------------------
 -- Query building
