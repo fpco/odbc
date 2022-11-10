@@ -591,7 +591,7 @@ fetchAllResults' dbc stmt = countRows <* fetchAllResults dbc stmt
                "odbc_SQLRowCount"
                (odbc_SQLRowCount stmt sizep)
              peek sizep)
-      pure $! fromIntegral rows
+      pure $! fromIntegral (max 0 rows)
 
 -- | Fetch all rows from a statement.
 fetchStatementRows :: Ptr EnvAndDbc -> SQLHSTMT s -> IO [[(Column,Value)]]
