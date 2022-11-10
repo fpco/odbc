@@ -580,18 +580,8 @@ fetchAllResults dbc stmt = do
 
 -- | Fetch all results from possible multiple statements.
 fetchAllResults' :: Ptr EnvAndDbc -> SQLHSTMT s -> IO Int
-fetchAllResults' dbc stmt = go 0
+fetchAllResults' dbc stmt = countRows <* fetchAllResults dbc stmt
   where
-    go !rowsTotal = do
-      rows <- countRows
-      retcode <-
-        assertSuccessOrNoData
-          dbc
-          "odbc_SQLMoreResults"
-          (odbc_SQLMoreResults dbc stmt)
-      if retcode == sql_success || retcode == sql_success_with_info
-        then go (rowsTotal + rows)
-        else pure (rowsTotal + rows)
     countRows = do
       SQLLEN rows <-
         withMalloc
