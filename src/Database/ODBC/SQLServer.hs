@@ -25,6 +25,7 @@ module Database.ODBC.SQLServer
 
     -- * Executing queries
   , exec
+  , execAffectedRows
   , query
   , Value(..)
   , Query
@@ -79,8 +80,6 @@ import           Data.Fixed
 import           Data.Foldable
 import           Data.Int
 import           Data.Maybe
-import           Data.Monoid (Monoid, (<>))
-import           Data.Semigroup (Semigroup)
 import           Data.Sequence (Seq)
 import qualified Data.Sequence as Seq
 import           Data.String
@@ -482,6 +481,17 @@ exec c q = Internal.execWithParams c rendered params
   where
     (rendered, params) = renderedAndParams q
 
+-- | Execute a statement on the database and return number of affected rows.
+execAffectedRows ::
+     MonadIO m
+  => Connection -- ^ A connection to the database.
+  -> Query -- ^ SQL statement.
+  -> m Int
+execAffectedRows c q = Internal.execAffectedRowsWithParams c rendered params
+  where
+    (rendered, params) = renderedAndParams q
+{-# INLINE execAffectedRows #-}
+
 --------------------------------------------------------------------------------
 -- Query building
 
@@ -496,7 +506,7 @@ renderedAndParams q = (renderParts parts', params)
            ValuePart v
              | Just {} <- valueToParam v ->
                case v of
-                 TextValue t -> TextPart "CAST(? AS NVARCHAR(MAX))"
+                 TextValue _ -> TextPart "CAST(? AS NVARCHAR(MAX))"
                  _ -> TextPart "?"
            p -> p)
         parts

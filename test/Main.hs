@@ -64,6 +64,7 @@ spec = do
     (do describe "Connectivity" connectivity
         describe "Regression tests" regressions
         describe "Data retrieval" dataRetrieval
+        describe "Data affected" dataAffected
         describe "Big data" bigData)
   describe
     "Database.ODBC.SQLServer"
@@ -191,6 +192,25 @@ connectivity = do
     "Connect/disconnect loop"
     (do sequence_ [connectWithString >>= Internal.close | _ <- [1 :: Int .. 10]]
         shouldBe True True)
+
+dataAffected :: Spec
+dataAffected = do
+  it
+    "Basic sanity check"
+    (do c <- connectWithString
+        _ <- Internal.execAffectedRows c "DROP TABLE IF EXISTS test"
+        arOnCreate <- Internal.execAffectedRows
+          c
+          "CREATE TABLE test (int integer, text text, bool bit, nt ntext, fl float)"
+        _ <- Internal.execAffectedRows
+          c
+          "INSERT INTO test VALUES (123, 'abc', 1, 'wib', 2.415), (456, 'def', 0, 'wibble',0.9999999999999), (NULL, NULL, NULL, NULL, NULL)"
+        arOnDelete <- Internal.execAffectedRows c "delete from test"
+        arOnDelete' <- Internal.execAffectedRows c "delete from test"
+        Internal.close c
+        shouldBe
+          [("create", arOnCreate), ("delete", arOnDelete), ("delete'", arOnDelete')]
+          [("create", 0), ("delete", 3), ("delete'", 0)])
 
 dataRetrieval :: Spec
 dataRetrieval = do

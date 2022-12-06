@@ -10,7 +10,6 @@ module Database.ODBC.TH
 import           Control.DeepSeq
 import           Data.Char
 import           Data.List (foldl1')
-import           Data.Monoid ((<>))
 import           Language.Haskell.TH (Q, Exp)
 import qualified Language.Haskell.TH as TH
 import           Language.Haskell.TH.Quote (QuasiQuoter(..))
