@@ -25,7 +25,7 @@ module Database.ODBC.SQLServer
 
     -- * Executing queries
   , exec
-  , exec'
+  , execAffectedRows
   , query
   , Value(..)
   , Query
@@ -484,15 +484,15 @@ exec c q = Internal.execWithParams c rendered params
     (rendered, params) = renderedAndParams q
 
 -- | Execute a statement on the database and return number of affected rows.
-exec' ::
+execAffectedRows ::
      MonadIO m
   => Connection -- ^ A connection to the database.
   -> Query -- ^ SQL statement.
   -> m Int
-exec' c q = Internal.execWithParams' c rendered params
+execAffectedRows c q = Internal.execAffectedRowsWithParams c rendered params
   where
     (rendered, params) = renderedAndParams q
-{-# INLINE exec' #-}
+{-# INLINE execAffectedRows #-}
 
 --------------------------------------------------------------------------------
 -- Query building

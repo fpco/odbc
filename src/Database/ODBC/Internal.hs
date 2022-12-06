@@ -29,7 +29,7 @@ module Database.ODBC.Internal
   , Connection
     -- * Executing queries
   , exec
-  , exec'
+  , execAffectedRows
   , query
   , Value(..)
   , Binary(..)
@@ -39,7 +39,7 @@ module Database.ODBC.Internal
   , Step(..)
     -- * Parameters
   , execWithParams
-  , execWithParams'
+  , execAffectedRowsWithParams
   , queryWithParams
   , streamWithParams
   , Param(..)
@@ -285,15 +285,15 @@ exec conn string = execWithParams conn string mempty
 -- | Execute a statement on the database and returns number of affected rows.
 --
 -- @since 0.2.7
-exec' ::
+execAffectedRows ::
      MonadIO m
   => Connection -- ^ A connection to the database.
   -> Text -- ^ SQL statement.
   -> m Int
-exec' conn string = execWithParams' conn string mempty
-{-# INLINE exec' #-}
+execAffectedRows conn string = execAffectedRowsWithParams conn string mempty
+{-# INLINE execAffectedRows #-}
 
--- | Same as 'exec' but with parameters.
+-- | Same as 'execAffectedRows but with parameters.
 --
 -- @since 0.2.4
 execWithParams ::
@@ -309,16 +309,16 @@ execWithParams conn string params =
        "exec"
        (\dbc -> withExecDirect dbc string params (fetchAllResults dbc)))
 
--- | Same as 'execWithParams' but returns number of affected rows.
+-- | Same as 'execAffectedRowsWithParams but returns number of affected rows.
 --
 -- @since 0.2.7
-execWithParams' ::
+execAffectedRowsWithParams ::
      MonadIO m
   => Connection -- ^ A connection to the database.
   -> Text -- ^ SQL query with ? inside.
   -> [Param] -- ^ Params matching the ? in the query string.
   -> m Int
-execWithParams' conn string params =
+execAffectedRowsWithParams conn string params =
   withBound
     (withHDBC
        conn
