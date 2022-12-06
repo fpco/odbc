@@ -80,8 +80,6 @@ import           Data.Fixed
 import           Data.Foldable
 import           Data.Int
 import           Data.Maybe
-import           Data.Monoid (Monoid, (<>))
-import           Data.Semigroup (Semigroup)
 import           Data.Sequence (Seq)
 import qualified Data.Sequence as Seq
 import           Data.String
@@ -508,7 +506,7 @@ renderedAndParams q = (renderParts parts', params)
            ValuePart v
              | Just {} <- valueToParam v ->
                case v of
-                 TextValue t -> TextPart "CAST(? AS NVARCHAR(MAX))"
+                 TextValue _ -> TextPart "CAST(? AS NVARCHAR(MAX))"
                  _ -> TextPart "?"
            p -> p)
         parts

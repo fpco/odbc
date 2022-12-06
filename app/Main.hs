@@ -5,12 +5,10 @@
 
 module Main (main) where
 
-import           Data.List
 import           Data.Time.LocalTime (ZonedTime(..))
 import qualified Data.Text as T
 import qualified Data.Text.IO as T
 import           Control.Exception
-import qualified Data.Text as T
 import qualified Database.ODBC.Internal as ODBC
 import           System.Environment
 import           System.IO
