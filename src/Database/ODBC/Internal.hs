@@ -11,6 +11,7 @@
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE ForeignFunctionInterface #-}
+{-# LANGUAGE CPP #-}
 
 -- | ODBC database API.
 --
@@ -62,7 +63,14 @@ import           Data.Int
 import           Data.String
 import           Data.Text (Text)
 import qualified Data.Text as T
+#if MIN_VERSION_text(2,0,0)
+import qualified Data.ByteString.Internal as SI
+import qualified Data.Text.Encoding.Error as T
+import qualified Data.Text.Encoding as T
+#else
 import qualified Data.Text.Foreign as T
+import           Data.Text.Foreign (I16)
+#endif
 import           Data.Time
 import           Foreign hiding (void)
 import           Foreign.C
@@ -399,7 +407,7 @@ withExecDirect dbc string params cont =
             (assertSuccessOrNoData
                dbc
                "odbc_SQLExecDirectW"
-               (T.useAsPtr
+               (useAsPtrCompat
                   string
                   (\wstring len ->
                      odbc_SQLExecDirectW
@@ -449,7 +457,7 @@ withBindParameter dbc parameter_number param cont statement_handle = go param
     go =
       \case
         TextParam text ->
-          T.useAsPtr -- Pass as wide char UTF-16.
+          useAsPtrCompat -- Pass as wide char UTF-16.
             text
             (\ptr len_in_chars ->
                runBind
@@ -587,7 +595,7 @@ fetchStatementRows dbc stmt = do
 -- | Describe the given column by its integer index.
 describeColumn :: Ptr EnvAndDbc -> SQLHSTMT s -> Int16 -> IO Column
 describeColumn dbPtr stmt i =
-  T.useAsPtr
+  useAsPtrCompat
     (T.replicate 1000 (fromString "0"))
     (\namep namelen ->
        (withMalloc
@@ -618,7 +626,7 @@ describeColumn dbPtr stmt i =
                                   digits <- peek digitsp
                                   isnull <- peek nullp
                                   namelen' <- peek namelenp
-                                  name <- T.fromPtr namep (fromIntegral namelen')
+                                  name <- fromPtrCompat namep (fromIntegral namelen')
                                   evaluate
                                     Column
                                     { columnType = typ
@@ -930,12 +938,13 @@ getBinaryData dbc stmt column = do
 -- | Get the column's data as a text string.
 getTextData :: Ptr EnvAndDbc -> SQLHSTMT s -> SQLUSMALLINT -> IO Value
 getTextData dbc stmt column = do
+  -- We need to fetch as UTF-16LE (see callsite), then convert to Text
   mavailableChars <- getSize dbc stmt sql_c_wchar column
   case mavailableChars of
     Just 0 -> pure (TextValue mempty)
     Nothing -> pure NullValue
     Just availableBytes -> do
-      let allocBytes = availableBytes + 2
+      let allocBytes = availableBytes + 2 -- room for NULL
       withMallocBytes
         (fromIntegral allocBytes)
         (\bufferp -> do
@@ -947,7 +956,7 @@ getTextData dbc stmt column = do
                 column
                 (coerce bufferp)
                 (SQLLEN (fromIntegral allocBytes)))
-           t <- T.fromPtr bufferp (fromIntegral (div availableBytes 2))
+           t <- fromPtrCompat bufferp (fromIntegral (div availableBytes 2))
            let !v = TextValue t
            pure v)
 
@@ -1433,3 +1442,38 @@ sql_c_time = coerce sql_time
 -- <https://docs.rs/odbc-sys/0.6.3/odbc_sys/constant.SQL_SS_LENGTH_UNLIMITED.html>
 sql_ss_length_unlimited :: SQLULEN
 sql_ss_length_unlimited = 0
+
+
+#if MIN_VERSION_text(2,0,0)
+type I16 = Int
+#endif
+
+-- FIXME fail with Randomized with seed 1862667972
+-- (on 9.2 as well)
+
+-------- 'T.fromPtr' but compatible with text v1 and v2
+
+fromPtrCompat :: Ptr Word16 -> I16 -> IO Text
+#if MIN_VERSION_text(2,0,0)
+fromPtrCompat bufferp len16 = do
+    let lenBytes = len16 * 2
+        noFinalizer = return ()  -- N.B. inner bufferp is 'free'd after this withMallocBytes block
+    -- invariant: this does no additional allocation
+    tempBS <- S.unsafePackCStringFinalizer (castPtr bufferp) lenBytes noFinalizer
+    -- invariant: this makes a copy:
+    return $! T.decodeUtf16LEWith T.strictDecode tempBS
+#else
+fromPtrCompat = T.fromPtr
+#endif
+
+useAsPtrCompat :: Text -> (Ptr Word16 -> I16 -> IO a) -> IO a
+#if MIN_VERSION_text(2,0,0)
+useAsPtrCompat t cont16 = do
+    let (fp8, len8) = SI.toForeignPtr0 $ T.encodeUtf16LE t
+        fp16 = castForeignPtr fp8
+        len16 = len8 `div` 2
+    withForeignPtr fp16 $ \p16 ->
+        cont16 p16 (fromIntegral len16)
+#else
+useAsPtrCompat = T.useAsPtr
+#endif

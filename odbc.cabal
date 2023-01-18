@@ -5,7 +5,7 @@ description: Haskell binding to the ODBC API. This has been tested
              suite runs on OS X, Windows and Linux.
 copyright: FP Complete 2018
 maintainer: chrisdone@fpcomplete.com
-version:             0.2.6
+version:             0.3.0
 license:             BSD3
 license-file:        LICENSE
 build-type:          Simple

@@ -495,7 +495,7 @@ renderedAndParams q = (renderParts parts', params)
       map
         (\case
            ValuePart v
-             | Just _ <- valueToParam v ->
+             | Just {} <- valueToParam v ->
                case v of
                  TextValue t -> TextPart "CAST(? AS NVARCHAR(MAX))"
                  _ -> TextPart "?"
