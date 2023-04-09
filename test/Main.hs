@@ -231,7 +231,7 @@ dataRetrieval = do
             c
             "DROP TABLE IF EXISTS no_such_table"
             (\s _ -> pure (Stop s))
-            []
+            (\_ -> pure [])
         shouldBe (map (map snd) (rows1 ++ rows2)) [])
   quickCheckInternalRoundtrip
     "Int"

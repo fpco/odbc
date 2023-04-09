@@ -42,6 +42,7 @@ module Database.ODBC.SQLServer
 
   , stream
   , Internal.Step(..)
+  , Internal.Column(..)
 
     -- * Exceptions
     -- $exceptions
@@ -455,7 +456,7 @@ stream ::
   -> (state -> row -> m (Internal.Step state))
   -- ^ A stepping function that gets as input the current @state@ and
   -- a row, returning either a new @state@ or a final @result@.
-  -> state
+  -> ([Internal.Column] -> m state)
   -- ^ A state that you can use for the computation. Strictly
   -- evaluated each iteration.
   -> m state
@@ -494,7 +495,7 @@ renderedAndParams q = (renderParts parts', params)
       map
         (\case
            ValuePart v
-             | Just {} <- valueToParam v ->
+             | Just _ <- valueToParam v ->
                case v of
                  TextValue t -> TextPart "CAST(? AS NVARCHAR(MAX))"
                  _ -> TextPart "?"
