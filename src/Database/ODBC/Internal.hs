@@ -1449,9 +1449,6 @@ sql_ss_length_unlimited = 0
 type I16 = Int
 #endif
 
--- FIXME fail with Randomized with seed 1862667972
--- (on 9.2 as well)
-
 -------- 'T.fromPtr' but compatible with text v1 and v2
 
 fromPtrCompat :: Ptr Word16 -> I16 -> IO Text

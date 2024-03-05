@@ -688,28 +688,32 @@ instance Arbitrary TestChar where
                 else t) <>
              S8.replicate maxStringLen ' ')))
 
+-- | Generate a date between 1753-01-01 and 1835-02-21.
 instance Arbitrary Day where
   arbitrary = do
     offset <- choose (0, 30000)
     pure (addDays offset (fromGregorian 1753 01 01))
 
+secondsInDay :: Integer
+secondsInDay = 86400
+
+minutesInDay :: Integer
+minutesInDay = 1440
+
+-- | Generate a time of day between 00:00:00.0000000 and 23:59:59.9999999. Mirrors the range of SQL
+-- Server's @time@ type.
 instance Arbitrary TimeOfDay where
   arbitrary = do
     fractional <- choose (0, 9999999) :: Gen Integer
-    seconds <- choose (0, 86400)
+    seconds <- choose (0, secondsInDay - 1)
     pure
       (timeToTimeOfDay
          (secondsToDiffTime seconds + (fromRational (fractional % 10000000))))
 
+-- | Generate a date and time between 1753-01-01 00:00:00.0000000 and 1835-02-21 23:59:59.9999999.
 instance Arbitrary LocalTime where
-  arbitrary = LocalTime <$> arbitrary <*> arbitraryLimited
-    where
-      arbitraryLimited = do
-        fractional <- choose (0, 9999999) :: Gen Integer
-        seconds <- choose (0, 86400)
-        pure
-          (timeToTimeOfDay
-             (secondsToDiffTime seconds + (fromRational (fractional % 10000000))))
+  -- Using the Day and TimeOfDay Arbitrary instances defined above
+  arbitrary = LocalTime <$> arbitrary <*> arbitrary
 
 newtype TestDateTime = TestDateTime Datetime2
   deriving (Eq, Ord, Show, SQLServer.ToSql, FromValue)
@@ -717,27 +721,31 @@ newtype TestDateTime = TestDateTime Datetime2
 newtype TestTimeOfDay = TestTimeOfDay TimeOfDay
   deriving (Eq, Ord, Show, SQLServer.ToSql, FromValue)
 
+-- | Generate a time of day between 00:00:00 and 23:59:59.
 instance Arbitrary TestTimeOfDay where
   arbitrary = do
-    seconds <- choose (0, 86400)
+    seconds <- choose (0, secondsInDay - 1)
     pure (TestTimeOfDay (timeToTimeOfDay (secondsToDiffTime seconds)))
 
+-- | Generate a time of day rounded to increments of .000, .003, or .007 seconds.
+-- 
+-- See <https://docs.microsoft.com/en-us/sql/t-sql/data-types/datetime-transact-sql>
 instance Arbitrary TestDateTime where
   arbitrary = fmap (TestDateTime . Datetime2) (LocalTime <$> arbitrary <*> arbitraryLimited)
     where
       arbitraryLimited = do
         fractional <- elements [993, 003, 497, 007, 000, 127] :: Gen Integer
-        -- 	Rounded to increments of .000, .003, or .007 seconds
-        -- from: https://docs.microsoft.com/en-us/sql/t-sql/data-types/datetime-transact-sql
-        seconds <- choose (0, 86400)
+        seconds <- choose (0, secondsInDay - 1)
         pure
           (timeToTimeOfDay
              (secondsToDiffTime seconds + (fromRational (fractional % 1000))))
 
 deriving instance Arbitrary Datetime2
+
+-- | Generate a date and time between 1900-01-01 00:00 and 1900-06-29 23:59.
 instance Arbitrary Smalldatetime where
   arbitrary = do
-    minutes <- choose (0, 1440)
+    minutes <- choose (0, minutesInDay - 1)
     day <-
       do offset <- choose (0, 179)
          pure (addDays offset (fromGregorian 1900 01 01))
