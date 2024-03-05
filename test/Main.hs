@@ -696,7 +696,7 @@ instance Arbitrary Day where
 instance Arbitrary TimeOfDay where
   arbitrary = do
     fractional <- choose (0, 9999999) :: Gen Integer
-    seconds <- choose (0, 86400)
+    seconds <- choose (0, 86399)
     pure
       (timeToTimeOfDay
          (secondsToDiffTime seconds + (fromRational (fractional % 10000000))))
@@ -706,7 +706,7 @@ instance Arbitrary LocalTime where
     where
       arbitraryLimited = do
         fractional <- choose (0, 9999999) :: Gen Integer
-        seconds <- choose (0, 86400)
+        seconds <- choose (0, 86399)
         pure
           (timeToTimeOfDay
              (secondsToDiffTime seconds + (fromRational (fractional % 10000000))))
@@ -719,7 +719,7 @@ newtype TestTimeOfDay = TestTimeOfDay TimeOfDay
 
 instance Arbitrary TestTimeOfDay where
   arbitrary = do
-    seconds <- choose (0, 86400)
+    seconds <- choose (0, 86399)
     pure (TestTimeOfDay (timeToTimeOfDay (secondsToDiffTime seconds)))
 
 instance Arbitrary TestDateTime where
@@ -729,7 +729,7 @@ instance Arbitrary TestDateTime where
         fractional <- elements [993, 003, 497, 007, 000, 127] :: Gen Integer
         -- 	Rounded to increments of .000, .003, or .007 seconds
         -- from: https://docs.microsoft.com/en-us/sql/t-sql/data-types/datetime-transact-sql
-        seconds <- choose (0, 86400)
+        seconds <- choose (0, 86399)
         pure
           (timeToTimeOfDay
              (secondsToDiffTime seconds + (fromRational (fractional % 1000))))
@@ -737,7 +737,7 @@ instance Arbitrary TestDateTime where
 deriving instance Arbitrary Datetime2
 instance Arbitrary Smalldatetime where
   arbitrary = do
-    minutes <- choose (0, 1440)
+    minutes <- choose (0, 1439)
     day <-
       do offset <- choose (0, 179)
          pure (addDays offset (fromGregorian 1900 01 01))
