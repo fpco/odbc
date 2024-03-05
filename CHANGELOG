@@ -1,5 +1,6 @@
-0.2.7:
+0.3.0:
 	* Add support for DATETIMEOFFSET
+	* Add support for text-2.0
 0.2.6:
 	* Add support for SQLSTATE
 	* Fix copying issues for error messages
