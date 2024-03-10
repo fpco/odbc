@@ -342,7 +342,7 @@ stream ::
   -> (state -> [(Column, Value)] -> m (Step state))
   -- ^ A stepping function that gets as input the current @state@ and
   -- a row, returning either a new @state@ or a final @result@.
-  -> state
+  -> ([Column] -> m state)
   -- ^ A state that you can use for the computation. Strictly
   -- evaluated each iteration.
   -> m state
@@ -360,7 +360,7 @@ streamWithParams ::
   -> (state -> [(Column, Value)] -> m (Step state))
   -- ^ A stepping function that gets as input the current @state@ and
   -- a row, returning either a new @state@ or a final @result@.
-  -> state
+  -> ([Column] -> m state)
   -- ^ A state that you can use for the computation. Strictly
   -- evaluated each iteration.
   -> m state
@@ -504,7 +504,7 @@ fetchIterator ::
      Ptr EnvAndDbc
   -> UnliftIO m
   -> (state -> [(Column, Value)] -> m (Step state))
-  -> state
+  -> ([Column] -> m state)
   -> SQLHSTMT s
   -> IO state
 fetchIterator dbc (UnliftIO runInIO) step state0 stmt = do
@@ -541,9 +541,8 @@ fetchIterator dbc (UnliftIO runInIO) step state0 stmt = do
                      (coerce retcode0)
                      "Unexpected return code"
                      sqlState)
-  if cols > 0
-    then loop state0
-    else pure state0
+
+  (if cols > 0 then loop else pure) =<< runInIO (state0 types)
 
 -- | Fetch all results from possible multiple statements.
 fetchAllResults :: Ptr EnvAndDbc -> SQLHSTMT s -> IO ()

@@ -1,2 +1,4 @@
 .stack-work
 _release
+result
+cabal.project.local
